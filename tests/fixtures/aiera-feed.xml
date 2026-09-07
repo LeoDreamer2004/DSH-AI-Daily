@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>AI Era</title>
+    <item>
+      <title><![CDATA[First <strong>research</strong> story]]></title>
+      <link>https://aiera.com.cn/2026/09/05/research/editor/100/first-story/?utm_source=feed&amp;ref=home</link>
+      <dc:creator><![CDATA[AIERA Editor]]></dc:creator>
+      <pubDate>Sat, 05 Sep 2026 08:30:00 +0800</pubDate>
+      <description><![CDATA[<p>A concise first description.</p>]]></description>
+    </item>
+    <item>
+      <title>Second story</title>
+      <link>/2026/09/04/industry/editor/99/second-story/</link>
+      <pubDate>Fri, 04 Sep 2026 12:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Missing link</title>
+    </item>
+  </channel>
+</rss>

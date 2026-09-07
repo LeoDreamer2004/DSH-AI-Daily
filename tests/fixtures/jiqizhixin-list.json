@@ -1,0 +1,30 @@
+{
+  "success": true,
+  "articles": [
+    {
+      "id": "machine-heart-article-1",
+      "title": "A mathematical system improves agent reasoning",
+      "coverImageUrl": "https://image.jiqizhixin.com/example.jpg",
+      "category": "industry",
+      "slug": "2026-09-06-6",
+      "tagList": ["reasoning", "agents"],
+      "author": "Machine Heart",
+      "publishedAt": "2026/09/06 19:08",
+      "content": "Researchers introduced a system for testing adaptive reasoning.",
+      "source": "Machine Heart"
+    },
+    {
+      "id": "machine-heart-article-2",
+      "title": "A new model enters production",
+      "category": "practice",
+      "slug": "2026-09-05-4",
+      "tagList": [],
+      "author": "Machine Heart",
+      "publishedAt": "2026/09/05 08:30",
+      "content": "The release focuses on efficient inference.",
+      "source": "Machine Heart"
+    }
+  ],
+  "totalCount": 30957,
+  "hasNextPage": true
+}

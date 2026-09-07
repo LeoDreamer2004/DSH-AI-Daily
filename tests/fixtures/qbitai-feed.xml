@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>QbitAI</title>
+    <item>
+      <title><![CDATA[Embodied learning reaches a new milestone]]></title>
+      <link>https://www.qbitai.com/2026/09/484897.html?utm_source=feed</link>
+      <dc:creator><![CDATA[QbitAI Editor]]></dc:creator>
+      <pubDate>Sun, 06 Sep 2026 11:44:21 +0000</pubDate>
+      <description><![CDATA[Robots learn from longer multimodal context.]]></description>
+    </item>
+    <item>
+      <title>New open model improves agent planning</title>
+      <link>https://www.qbitai.com/2026/09/484726.html</link>
+      <dc:creator>Research Desk</dc:creator>
+      <pubDate>Sat, 05 Sep 2026 15:07:08 +0000</pubDate>
+      <description><![CDATA[The release combines model and systems improvements.]]></description>
+    </item>
+    <item>
+      <title>External entry</title>
+      <link>https://example.com/not-a-qbitai-article</link>
+    </item>
+  </channel>
+</rss>
