@@ -23,6 +23,7 @@ import { registerAiDailyTools } from './tools.js'
 export * from './analysis/model.js'
 export * from './digest.js'
 export * from './dashboard/rpc.js'
+export * from './dashboard/protocol.js'
 export * from './dashboard/types.js'
 export * from './scheduler.js'
 export * from './settings.js'
@@ -83,11 +84,11 @@ export interface Config {
   readonly maxArticlesPerRefresh?: number
   /** IANA time zone used to group articles into daily digests. */
   readonly timeZone?: string
-  /** Whether to run one automatic refresh per local day. */
+  /** Whether to crawl enabled sources automatically once per local day. */
   readonly automaticRefresh?: boolean
-  /** Local hour for automatic refresh. */
+  /** Local hour for the automatic source crawl. */
   readonly dailyHour?: number
-  /** Local minute for automatic refresh. */
+  /** Local minute for the automatic source crawl. */
   readonly dailyMinute?: number
   /** Scheduler polling interval. */
   readonly schedulerCheckIntervalMs?: number
@@ -203,7 +204,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     hour: resolved.dailyHour,
     minute: resolved.dailyMinute,
     timeZone: resolved.timeZone,
-    maxArticles: resolved.maxArticlesPerRefresh,
     checkIntervalMs: resolved.schedulerCheckIntervalMs,
   })
 }

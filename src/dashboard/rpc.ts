@@ -1,9 +1,20 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-client-connection'
+import {
+  clientRequestSchema,
+  type ConnectionFetchHandler,
+  type ConnectionRpcHandler,
+  type ServerResponse,
+} from '@deepseek-ai/dsh-client-connection'
 import { z } from 'zod'
 import { parseCalendarDate } from '../digest.js'
 import type { AiDailyService } from '../service.js'
 import type { ArticleId, ArticleRecord } from '../types.js'
+import {
+  AI_DAILY_RPC_ENDPOINTS,
+  aiDailyRpcMethod,
+  aiDailyRpcPath,
+  type AiDailyRpcEndpoint,
+} from './protocol.js'
 import type {
   DashboardArticleDetail,
   DashboardArticleItem,
@@ -13,9 +24,6 @@ import type {
   DashboardOperationStatus,
   DashboardSnapshot,
 } from './types.js'
-
-/** Authenticated Connection channel owned by the AI Daily dashboard. */
-export const AI_DAILY_RPC_CHANNEL = '/ai-daily'
 
 const MAX_PAGE_SIZE = 100
 const DEFAULT_PAGE_SIZE = 50
@@ -170,76 +178,114 @@ function failure(error: unknown): {
   }
 }
 
-/** Register the authenticated dashboard RPC endpoints on the DSH Connection. */
+function dashboardHandler(service: AiDailyService): ConnectionRpcHandler {
+  return async (endpoint, payload, signal) => {
+    try {
+      if (endpoint === 'snapshot') {
+        const request = snapshotRequestSchema.parse(payload)
+        return { ok: true, value: snapshot(service, request) }
+      }
+      if (endpoint === 'crawl') {
+        const request = snapshotRequestSchema.parse(payload)
+        const crawl = await service.crawl(signal)
+        const value: DashboardCrawlResult = {
+          crawl,
+          snapshot: snapshot(service, request),
+        }
+        return { ok: true, value }
+      }
+      if (endpoint === 'summarize' || endpoint === 'retry-failures') {
+        const request = snapshotRequestSchema.parse(payload)
+        const date = request.date === undefined ? undefined : parseCalendarDate(request.date)
+        const result = endpoint === 'summarize'
+          ? await service.summarize(date, signal)
+          : await service.retryFailures(date, signal)
+        const { digest: _digest, ...analysis } = result
+        const value: DashboardAnalysisResult = {
+          analysis,
+          snapshot: snapshot(service, { ...request, ...(date === undefined ? {} : { date }) }),
+        }
+        return { ok: true, value }
+      }
+      if (endpoint === 'operation-status') {
+        const request = snapshotRequestSchema.parse(payload)
+        const value: DashboardOperationStatus = {
+          progress: service.operationProgress() ?? null,
+          snapshot: snapshot(service, request),
+        }
+        return { ok: true, value }
+      }
+      if (endpoint === 'reanalyze') {
+        const request = reanalyzeRequestSchema.parse(payload)
+        await service.reanalyze(request.id as ArticleId, signal)
+        return { ok: true, value: snapshot(service, request) }
+      }
+      if (endpoint === 'article') {
+        const request = articleRequestSchema.parse(payload)
+        const article = service.getArticle(request.id as ArticleId)
+        if (article === undefined || article.status !== 'processed') {
+          return {
+            ok: false,
+            error: {
+              code: 'ai-daily/not-found',
+              message: 'Processed article was not found',
+              details: {},
+            },
+          }
+        }
+        return { ok: true, value: dashboardDetail(service, article) }
+      }
+      return {
+        ok: false,
+        error: { code: 'ai-daily/not-found', message: 'Dashboard endpoint was not found', details: {} },
+      }
+    } catch (error) {
+      return failure(error)
+    }
+  }
+}
+
+function dashboardFetchHandler(
+  handler: ConnectionRpcHandler,
+  endpoint: AiDailyRpcEndpoint,
+): ConnectionFetchHandler['fetch'] {
+  const expectedMethod = aiDailyRpcMethod(endpoint)
+  return async (request) => {
+    const mediaType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
+    if (mediaType !== 'application/json') {
+      return new Response('content type must be application/json', { status: 415 })
+    }
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return new Response('body is not JSON', { status: 400 })
+    }
+    const parsed = clientRequestSchema.safeParse(body)
+    if (!parsed.success || parsed.data.method !== expectedMethod) {
+      return new Response('invalid Connection request envelope', { status: 400 })
+    }
+    const response: ServerResponse = {
+      type: 'server-response',
+      rpcId: parsed.data.rpcId,
+      result: await handler(endpoint, parsed.data.payload, request.signal),
+    }
+    return Response.json(response, { headers: { 'cache-control': 'no-store' } })
+  }
+}
+
+/** Register authenticated dashboard endpoints through Harness's shared API route table. */
 export function registerDashboardRpc(
   ctx: Context,
   service: AiDailyService,
 ): void {
-  ctx.effect(
-    () => ctx.connection.rpc.handle(AI_DAILY_RPC_CHANNEL, async (endpoint, payload, signal) => {
-      try {
-        if (endpoint === 'snapshot') {
-          const request = snapshotRequestSchema.parse(payload)
-          return { ok: true, value: snapshot(service, request) }
-        }
-        if (endpoint === 'crawl') {
-          const request = snapshotRequestSchema.parse(payload)
-          const crawl = await service.crawl(signal)
-          const value: DashboardCrawlResult = {
-            crawl,
-            snapshot: snapshot(service, request),
-          }
-          return { ok: true, value }
-        }
-        if (endpoint === 'summarize' || endpoint === 'retry-failures') {
-          const request = snapshotRequestSchema.parse(payload)
-          const date = request.date === undefined ? undefined : parseCalendarDate(request.date)
-          const result = endpoint === 'summarize'
-            ? await service.summarize(date, signal)
-            : await service.retryFailures(date, signal)
-          const { digest: _digest, ...analysis } = result
-          const value: DashboardAnalysisResult = {
-            analysis,
-            snapshot: snapshot(service, { ...request, ...(date === undefined ? {} : { date }) }),
-          }
-          return { ok: true, value }
-        }
-        if (endpoint === 'operation-status') {
-          const request = snapshotRequestSchema.parse(payload)
-          const value: DashboardOperationStatus = {
-            progress: service.operationProgress() ?? null,
-            snapshot: snapshot(service, request),
-          }
-          return { ok: true, value }
-        }
-        if (endpoint === 'reanalyze') {
-          const request = reanalyzeRequestSchema.parse(payload)
-          await service.reanalyze(request.id as ArticleId, signal)
-          return { ok: true, value: snapshot(service, request) }
-        }
-        if (endpoint === 'article') {
-          const request = articleRequestSchema.parse(payload)
-          const article = service.getArticle(request.id as ArticleId)
-          if (article === undefined || article.status !== 'processed') {
-            return {
-              ok: false,
-              error: {
-                code: 'ai-daily/not-found',
-                message: 'Processed article was not found',
-                details: {},
-              },
-            }
-          }
-          return { ok: true, value: dashboardDetail(service, article) }
-        }
-        return {
-          ok: false,
-          error: { code: 'ai-daily/not-found', message: 'Dashboard endpoint was not found', details: {} },
-        }
-      } catch (error) {
-        return failure(error)
-      }
-    }),
-    'ai-daily: dashboard RPC',
-  )
+  const handler = dashboardHandler(service)
+  for (const endpoint of AI_DAILY_RPC_ENDPOINTS) {
+    ctx.connection.fetch.register({
+      path: aiDailyRpcPath(endpoint),
+      methods: ['POST'],
+      requestBody: 'buffered',
+      fetch: dashboardFetchHandler(handler, endpoint),
+    })
+  }
 }

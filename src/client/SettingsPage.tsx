@@ -85,6 +85,7 @@ export function SettingsPage(props: SettingsPageProps) {
       <section className={css.card} aria-labelledby={sourceLegendId}>
         <div className={css.cardHeader}>
           <h3 id={sourceLegendId}>{t('settings.sources.title')}</h3>
+          <p>{t('settings.sources.note')}</p>
         </div>
         <div className={css.sourceList}>
           {SOURCES.map((source, index) => {

@@ -1,6 +1,7 @@
 import type { ClientConnectionRpc } from '@deepseek-ai/dsh-client-connection/client'
 import { describe, expect, it, vi } from 'vitest'
 import { DashboardController } from '../src/client/controller.js'
+import { AI_DAILY_RPC_CHANNEL, aiDailyRpcMethod } from '../src/dashboard/protocol.js'
 import type { ArticleId } from '../src/types.js'
 
 const emptySnapshot = {
@@ -41,7 +42,7 @@ describe('DashboardController background requests', () => {
     const pending = deferred<unknown>()
     const rpc = {
       call: vi.fn(async (_channel: string, endpoint: string) => {
-        if (endpoint === 'retry-failures') return await pending.promise
+        if (endpoint === aiDailyRpcMethod('retry-failures')) return await pending.promise
         throw new Error(`unexpected endpoint: ${endpoint}`)
       }),
     } as unknown as ClientConnectionRpc
@@ -62,7 +63,7 @@ describe('DashboardController background requests', () => {
       operation: undefined,
       snapshot: { queue: [], totalFailed: 0 },
     })
-    expect(rpc.call).toHaveBeenCalledWith('/ai-daily', 'retry-failures', {
+    expect(rpc.call).toHaveBeenCalledWith(AI_DAILY_RPC_CHANNEL, aiDailyRpcMethod('retry-failures'), {
       date: '2026-09-06', offset: 0, limit: 50,
     })
   })
@@ -71,7 +72,7 @@ describe('DashboardController background requests', () => {
     const pending = deferred<unknown>()
     const rpc = {
       call: vi.fn(async (_channel: string, endpoint: string) => {
-        if (endpoint === 'reanalyze') return await pending.promise
+        if (endpoint === aiDailyRpcMethod('reanalyze')) return await pending.promise
         throw new Error(`unexpected endpoint: ${endpoint}`)
       }),
     } as unknown as ClientConnectionRpc
@@ -99,8 +100,8 @@ describe('DashboardController background requests', () => {
     }
     const rpc = {
       call: vi.fn(async (_channel: string, endpoint: string) => {
-        if (endpoint === 'snapshot') return { ok: true, value: selectedSnapshot }
-        if (endpoint === 'summarize') return await pending.promise
+        if (endpoint === aiDailyRpcMethod('snapshot')) return { ok: true, value: selectedSnapshot }
+        if (endpoint === aiDailyRpcMethod('summarize')) return await pending.promise
         throw new Error(`unexpected endpoint: ${endpoint}`)
       }),
     } as unknown as ClientConnectionRpc
@@ -132,7 +133,7 @@ describe('DashboardController background requests', () => {
       snapshot: selectedSnapshot,
       toast: { kind: 'analysis', processedCount: 0, failedCount: 0 },
     })
-    expect(rpc.call).toHaveBeenCalledWith('/ai-daily', 'summarize', {
+    expect(rpc.call).toHaveBeenCalledWith(AI_DAILY_RPC_CHANNEL, aiDailyRpcMethod('summarize'), {
       date: '2026-09-05',
       offset: 0,
       limit: 50,
@@ -147,8 +148,8 @@ describe('DashboardController background requests', () => {
     }
     const rpc = {
       call: vi.fn(async (_channel: string, endpoint: string) => {
-        if (endpoint === 'summarize') return await pendingSummary.promise
-        if (endpoint === 'snapshot') return { ok: true, value: historicalSnapshot }
+        if (endpoint === aiDailyRpcMethod('summarize')) return await pendingSummary.promise
+        if (endpoint === aiDailyRpcMethod('snapshot')) return { ok: true, value: historicalSnapshot }
         throw new Error(`unexpected endpoint: ${endpoint}`)
       }),
     } as unknown as ClientConnectionRpc
@@ -182,7 +183,7 @@ describe('DashboardController background requests', () => {
     try {
       const rpc = {
         call: vi.fn(async (_channel: string, endpoint: string) => {
-          if (endpoint === 'crawl') {
+          if (endpoint === aiDailyRpcMethod('crawl')) {
             return {
               ok: true,
               value: {
@@ -244,8 +245,8 @@ describe('DashboardController background requests', () => {
       }
       const rpc = {
         call: vi.fn(async (_channel: string, endpoint: string) => {
-          if (endpoint === 'summarize') return await pendingSummary.promise
-          if (endpoint === 'operation-status') {
+          if (endpoint === aiDailyRpcMethod('summarize')) return await pendingSummary.promise
+          if (endpoint === aiDailyRpcMethod('operation-status')) {
             return {
               ok: true,
               value: {
@@ -263,7 +264,7 @@ describe('DashboardController background requests', () => {
               },
             }
           }
-          if (endpoint === 'article') {
+          if (endpoint === aiDailyRpcMethod('article')) {
             return {
               ok: true,
               value: {
@@ -339,12 +340,12 @@ describe('DashboardController background requests', () => {
     let snapshotCalls = 0
     const rpc = {
       call: vi.fn(async (_channel: string, endpoint: string) => {
-        if (endpoint === 'snapshot') {
+        if (endpoint === aiDailyRpcMethod('snapshot')) {
           snapshotCalls++
           if (snapshotCalls === 1) return { ok: true, value: emptySnapshot }
           return await pendingDate.promise
         }
-        if (endpoint === 'article') {
+        if (endpoint === aiDailyRpcMethod('article')) {
           return {
             ok: true,
             value: {

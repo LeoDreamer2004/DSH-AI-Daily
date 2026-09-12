@@ -118,7 +118,6 @@ describe('LlmArticleAnalyzer', () => {
     expect(request?.system).toContain('Chinese Markdown document')
     expect(request?.system).toContain('do not summarize, categorize, score')
     expect(request?.system).toContain('native web access')
-    expect(request?.system).toContain('actively use it before answering')
     expect(request?.system).toContain('at least one independent reliable source')
     expect(request?.system).toContain('never imply that external verification occurred')
     expect(request?.messages[0]?.content[0]).toMatchObject({

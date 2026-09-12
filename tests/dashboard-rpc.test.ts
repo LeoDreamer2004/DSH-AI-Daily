@@ -1,6 +1,15 @@
 import { Context } from '@deepseek-ai/cordis'
-import type { ConnectionRpcHandler } from '@deepseek-ai/dsh-client-connection'
+import type {
+  ConnectionFetchRoute,
+  ConnectionRpcResult,
+  ServerResponse,
+} from '@deepseek-ai/dsh-client-connection'
 import { describe, expect, it, vi } from 'vitest'
+import {
+  aiDailyRpcMethod,
+  aiDailyRpcPath,
+  type AiDailyRpcEndpoint,
+} from '../src/dashboard/protocol.js'
 import { registerDashboardRpc } from '../src/dashboard/rpc.js'
 import type { AiDailyService } from '../src/service.js'
 import type { ArticleId, ArticleRecord, DailyDigest } from '../src/types.js'
@@ -71,27 +80,56 @@ function digest(date = '2026-09-06'): DailyDigest {
 
 function install(service: AiDailyService) {
   const ctx = new Context()
-  let handler: ConnectionRpcHandler | undefined
-  const closeRoute = vi.fn(async () => {})
+  const routes = new Map<string, ConnectionFetchRoute['fetch']>()
   ctx.provide('connection', {
-    rpc: {
-      handle: (channel: string, next: ConnectionRpcHandler) => {
-        expect(channel).toBe('/ai-daily')
-        handler = next
-        return closeRoute
+    fetch: {
+      register: (route: ConnectionFetchRoute) => {
+        expect(route.methods).toEqual(['POST'])
+        expect(route.requestBody).toBe('buffered')
+        routes.set(route.path, route.fetch)
+        return async () => {
+          routes.delete(route.path)
+        }
       },
     },
   } as never)
   return {
     ctx,
-    closeRoute,
     handler: async () => {
       const fiber = await ctx.plugin({
         inject: ['connection'],
         apply: pluginContext => { registerDashboardRpc(pluginContext, service) },
       })
-      if (handler === undefined) throw new Error('Dashboard RPC was not registered')
-      return { fiber, handler }
+      return {
+        fiber,
+        handler: async (
+          endpoint: AiDailyRpcEndpoint,
+          payload: unknown,
+          signal: AbortSignal,
+        ): Promise<ConnectionRpcResult<unknown>> => {
+          const path = aiDailyRpcPath(endpoint)
+          const route = routes.get(path)
+          if (route === undefined) throw new Error(`Dashboard route was not registered: ${path}`)
+          const response = await route(new Request(`http://localhost${path}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              type: 'client-request',
+              rpcId: `test-${endpoint}`,
+              method: aiDailyRpcMethod(endpoint),
+              payload,
+            }),
+            signal,
+          }))
+          expect(response.status).toBe(200)
+          const envelope = await response.json() as ServerResponse
+          expect(envelope).toMatchObject({
+            type: 'server-response',
+            rpcId: `test-${endpoint}`,
+          })
+          return envelope.result
+        },
+      }
     },
   }
 }
@@ -173,17 +211,17 @@ describe('AI Daily dashboard RPC', () => {
       ok: true,
       value: { crawl: { discoveredCount: 2 }, snapshot: { totalQueued: 2 } },
     })
-    expect(crawl).toHaveBeenCalledWith(signal)
+    expect(crawl).toHaveBeenCalledWith(expect.any(AbortSignal))
     await expect(handler('summarize', { date: '2026-09-06', limit: 10 }, signal)).resolves.toMatchObject({
       ok: true,
       value: { analysis: { processedCount: 1 }, snapshot: { totalQueued: 2 } },
     })
-    expect(summarize).toHaveBeenCalledWith('2026-09-06', signal)
+    expect(summarize).toHaveBeenCalledWith('2026-09-06', expect.any(AbortSignal))
     await expect(handler('retry-failures', { date: '2026-09-06', limit: 10 }, signal)).resolves.toMatchObject({
       ok: true,
       value: { analysis: { processedCount: 1 }, snapshot: { totalFailed: 1 } },
     })
-    expect(retryFailures).toHaveBeenCalledWith('2026-09-06', signal)
+    expect(retryFailures).toHaveBeenCalledWith('2026-09-06', expect.any(AbortSignal))
 
     await expect(handler('article', { id: articleId }, signal)).resolves.toMatchObject({
       ok: true,
@@ -195,10 +233,9 @@ describe('AI Daily dashboard RPC', () => {
       ok: true,
       value: { totalProcessed: 1 },
     })
-    expect(reanalyze).toHaveBeenCalledWith(articleId, signal)
+    expect(reanalyze).toHaveBeenCalledWith(articleId, expect.any(AbortSignal))
 
     await fiber.dispose()
-    expect(installed.closeRoute).toHaveBeenCalledOnce()
     await installed.ctx.fiber.dispose()
   })
 

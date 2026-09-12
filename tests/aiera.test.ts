@@ -1,7 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import type { WebFetchResult } from '@deepseek-ai/dsh-web'
-import { AieraSource, AieraSourceError, parseAieraFeed } from '../src/sources/aiera.js'
+import {
+  AieraSource,
+  AieraSourceError,
+  isAieraPlaceholderContent,
+  parseAieraFeed,
+  parseAieraPost,
+} from '../src/sources/aiera.js'
 
 const feedFixtureUrl = new URL('./fixtures/aiera-feed.xml', import.meta.url)
 const articleFixtureUrl = new URL('./fixtures/aiera-article.html', import.meta.url)
@@ -83,6 +89,64 @@ describe('AieraSource', () => {
     expect(document.contentHash).toMatch(/^[a-f0-9]{64}$/)
   })
 
+  it('loads the official WordPress API when the article page only contains a placeholder', async () => {
+    const article = (await parseFixtureArticles())[0]
+    if (article === undefined) throw new Error('fixture did not yield an article')
+    const requests: string[] = []
+    const source = new AieraSource({
+      fetch: async request => {
+        requests.push(request.url)
+        if (request.url === article.canonicalUrl) {
+          return response('<main><p class="pstate">正在取这篇稿子…</p></main>', 'html')
+        }
+        return response(JSON.stringify({
+          id: 100,
+          date: '2026-09-05T08:30:00',
+          date_gmt: '2026-09-05T00:30:00',
+          title: { rendered: 'Complete <strong>research</strong> story' },
+          content: { rendered: '<section><p>Full evidence from the official article API.</p></section>' },
+          _embedded: { author: [{ name: 'Aiera API Editor' }] },
+        }))
+      },
+    }, {
+      feedUrl,
+      maxFeedItems: 10,
+      maxArticleChars: 10_000,
+      requestTimeoutMs: 5_000,
+    })
+
+    const document = await source.read(article)
+
+    expect(requests).toEqual([
+      article.canonicalUrl,
+      'https://aiera.com.cn/wp-json/wp/v2/posts/100?_embed=1',
+    ])
+    expect(document).toMatchObject({
+      title: 'Complete research story',
+      author: 'Aiera API Editor',
+      publishedAt: '2026-09-05T00:30:00.000Z',
+    })
+    expect(document.content).toBe('Full evidence from the official article API.')
+    expect(document.content).not.toContain('正在取这篇稿子')
+  })
+
+  it('keeps a placeholder article out of model analysis when the official API is truncated', async () => {
+    const article = (await parseFixtureArticles())[0]
+    if (article === undefined) throw new Error('fixture did not yield an article')
+    const source = new AieraSource({
+      fetch: async request => request.url === article.canonicalUrl
+        ? response('<main>正在取这篇稿子...</main>', 'html')
+        : { ...response('{"id":100}'), truncated: true },
+    }, {
+      feedUrl,
+      maxFeedItems: 10,
+      maxArticleChars: 10_000,
+      requestTimeoutMs: 5_000,
+    })
+
+    await expect(source.read(article)).rejects.toMatchObject({ code: 'TRUNCATED_RESPONSE' })
+  })
+
   it('rejects non-success HTTP responses', async () => {
     const source = new AieraSource({
       fetch: async () => ({ ...response('failure'), statusCode: 503 }),
@@ -143,6 +207,27 @@ describe('AieraSource', () => {
     if (article === undefined) throw new Error('fixture did not yield an article')
 
     await expect(source.read(article)).rejects.toMatchObject({ code: 'TRUNCATED_RESPONSE' })
+  })
+})
+
+describe('Aiera dynamic article parsing', () => {
+  it('recognizes only loading-placeholder bodies', () => {
+    expect(isAieraPlaceholderContent('正在取这篇稿子…')).toBe(true)
+    expect(isAieraPlaceholderContent(' 正在加载这篇文章... ')).toBe(true)
+    expect(isAieraPlaceholderContent('The article discusses the loading placeholder.')).toBe(false)
+  })
+
+  it('rejects a mismatched WordPress post response', async () => {
+    const article = (await parseFixtureArticles())[0]
+    if (article === undefined) throw new Error('fixture did not yield an article')
+    const json = JSON.stringify({
+      id: 101,
+      title: { rendered: 'Wrong post' },
+      content: { rendered: '<p>Wrong content.</p>' },
+    })
+
+    expect(() => parseAieraPost(json, article, 100, 10_000))
+      .toThrow(/post id mismatch/)
   })
 })
 

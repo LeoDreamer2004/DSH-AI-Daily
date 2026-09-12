@@ -17,6 +17,7 @@ export interface WordPressRssSourceConfig {
 export type WordPressRssSourceErrorCode =
   | 'HTTP_ERROR'
   | 'INVALID_FEED'
+  | 'INVALID_RESPONSE'
   | 'EMPTY_CONTENT'
   | 'TRUNCATED_RESPONSE'
 

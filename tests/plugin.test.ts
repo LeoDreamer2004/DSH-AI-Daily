@@ -9,7 +9,7 @@ describe('AI Daily plugin lifecycle', () => {
     const ctx = new Context()
     const table = new MemoryArticleTable()
     const registeredTools: string[] = []
-    const registeredChannels: string[] = []
+    const registeredRoutes: string[] = []
     let domainClosed = false
     const registerSettings = vi.fn(() => ({
       get: () => ({
@@ -42,9 +42,9 @@ describe('AI Daily plugin lifecycle', () => {
     } as never)
     ctx.provide('timer', {} as never)
     ctx.provide('connection', {
-      rpc: {
-        handle: (channel: string) => {
-          registeredChannels.push(channel)
+      fetch: {
+        register: (route: { readonly path: string }) => {
+          registeredRoutes.push(route.path)
           return async () => {}
         },
       },
@@ -67,7 +67,7 @@ describe('AI Daily plugin lifecycle', () => {
       },
     )
     expect(registeredTools).toEqual(['ai_daily_refresh', 'ai_daily_digest', 'ai_daily_read'])
-    expect(registeredChannels).toEqual(['/ai-daily'])
+    expect(registeredRoutes).toEqual(plugin.AI_DAILY_RPC_ENDPOINTS.map(plugin.aiDailyRpcPath))
     await fiber.dispose()
     expect(domainClosed).toBe(true)
     await ctx.fiber.dispose()

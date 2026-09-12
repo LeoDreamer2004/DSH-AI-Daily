@@ -72,6 +72,7 @@ describe('AI Daily settings page', () => {
       '量子位',
       '新智元',
     ])
+    expect(screen.getByText(/官方 RSS\/API/)).toBeTruthy()
     expect(screen.getByText(/若要让日报使用独立密钥/)).toBeTruthy()
     const modelSelect = screen.getByLabelText('模型')
     const reloadButton = screen.getByRole('button', { name: '刷新模型' })

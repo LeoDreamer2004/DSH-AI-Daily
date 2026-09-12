@@ -2,13 +2,12 @@ import type { Context } from '@deepseek-ai/cordis'
 import { dateInTimeZone } from './digest.js'
 import type { AiDailyService } from './service.js'
 
-/** Automatic refresh timing and batch policy. */
+/** Automatic source-crawl timing policy. */
 export interface AutomaticRefreshConfig {
   readonly enabled: boolean
   readonly hour: number
   readonly minute: number
   readonly timeZone: string
-  readonly maxArticles: number
   readonly checkIntervalMs: number
 }
 
@@ -43,7 +42,7 @@ function localClock(instant: Date, timeZone: string): LocalClock {
 /**
  * Decide whether the configured daily wall-clock time has arrived.
  * @param instant - Current clock sample.
- * @param config - Resolved automatic refresh policy.
+ * @param config - Resolved automatic source-crawl policy.
  * @param lastAttemptDate - Local date already attempted by this process.
  * @returns Local date to claim, or undefined when no run is due.
  */
@@ -63,8 +62,8 @@ export function dueAutomaticRefreshDate(
 /**
  * Install a process-local daily refresh loop owned by the Cordis context.
  * @param ctx - Context providing lifecycle-bound timers and logging.
- * @param service - AI Daily service receiving refresh requests.
- * @param config - Resolved automatic refresh policy.
+ * @param service - AI Daily service receiving crawl requests.
+ * @param config - Resolved automatic source-crawl policy.
  * @param clock - Clock provider used by tests and production scheduling.
  * @returns Idempotent timer disposer.
  */
@@ -84,12 +83,12 @@ export function installAutomaticRefresh(
     if (date === undefined) return
     lastAttemptDate = date
     running = true
-    void service.refresh(config.maxArticles).then((result) => {
+    void service.crawl().then((result) => {
       ctx.logger.info(
-        `ai-daily: automatic refresh for ${date} completed with ${result.processedCount} processed and ${result.failedCount} failed`,
+        `ai-daily: automatic crawl for ${date} completed with ${result.discoveredCount} new and ${result.existingCount} existing article(s)`,
       )
     }, (error: unknown) => {
-      ctx.logger.error(`ai-daily: automatic refresh for ${date} failed: ${String(error)}`)
+      ctx.logger.error(`ai-daily: automatic crawl for ${date} failed: ${String(error)}`)
     }).finally(() => {
       running = false
     })

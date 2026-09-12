@@ -8,7 +8,6 @@ const config = {
   hour: 8,
   minute: 30,
   timeZone: 'Asia/Shanghai',
-  maxArticles: 10,
   checkIntervalMs: 60_000,
 }
 
@@ -24,12 +23,12 @@ describe('dueAutomaticRefreshDate', () => {
     expect(dueAutomaticRefreshDate(now, { ...config, enabled: false })).toBeUndefined()
   })
 
-  it('starts a due refresh once and registers a lifecycle timer', async () => {
+  it('starts a due crawl without model analysis and registers a lifecycle timer', async () => {
     let check: (() => void) | undefined
     const dispose = vi.fn()
     const info = vi.fn()
     const error = vi.fn()
-    const refresh = vi.fn(async () => ({ processedCount: 2, failedCount: 0 }))
+    const crawl = vi.fn(async () => ({ discoveredCount: 2, existingCount: 1 }))
     const ctx = {
       interval: (callback: () => void) => {
         check = callback
@@ -40,18 +39,18 @@ describe('dueAutomaticRefreshDate', () => {
 
     expect(installAutomaticRefresh(
       ctx,
-      { refresh } as unknown as AiDailyService,
+      { crawl } as unknown as AiDailyService,
       config,
       () => new Date('2026-09-06T00:30:00.000Z'),
     )).toBe(dispose)
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(refresh).toHaveBeenCalledOnce()
-    expect(refresh).toHaveBeenCalledWith(10)
+    expect(crawl).toHaveBeenCalledOnce()
+    expect(crawl).toHaveBeenCalledWith()
     expect(info).toHaveBeenCalledOnce()
     check?.()
-    expect(refresh).toHaveBeenCalledOnce()
+    expect(crawl).toHaveBeenCalledOnce()
     expect(error).not.toHaveBeenCalled()
   })
 })

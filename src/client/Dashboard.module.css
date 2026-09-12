@@ -249,7 +249,7 @@
 .ai-daily-queue-state { flex: none; display: inline-flex; align-items: center; gap: 5px; color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 18px; white-space: nowrap; }
 .ai-daily-queue-state-failed { color: var(--dsw-alias-state-error-primary); }
 .ai-daily-queue-excerpt { display: -webkit-box; overflow: hidden; margin: 5px 0 0; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 17px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.ai-daily-queue-error { margin: 7px 0 0; color: var(--dsw-alias-state-error-primary); font: 10px/16px ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+.ai-daily-queue-error { margin: 7px 0 0; color: var(--dsw-alias-label-secondary); font: 10px/16px ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
 .ai-daily-queue-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-top: 7px; }
 .ai-daily-queue-wave { height: 12px; display: inline-flex; align-items: center; gap: 2px; }
 .ai-daily-queue-wave i { width: 2px; height: 8px; border-radius: 999px; corner-shape: round; background: currentColor; animation: ai-daily-wave .9s ease-in-out infinite; }
@@ -276,11 +276,11 @@
 .ai-daily-skeleton-line-short { width: 48%; }
 
 .ai-daily-message { position: absolute; z-index: 5; top: 12px; left: 50%; width: min(560px, calc(100% - 80px)); display: flex; align-items: center; justify-content: space-between; gap: 12px; box-sizing: border-box; padding: 9px 12px; border-radius: 10px; box-shadow: var(--dsw-elevation-panel); font-size: 12px; line-height: 18px; transform: translateX(-50%); }
-.ai-daily-message-error { background: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-primary); }
+.ai-daily-message-error { border: .5px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 32%, transparent); background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 7%, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
 .ai-daily-toast { top: 18px; bottom: auto; width: auto; max-width: min(560px, calc(100% - 80px)); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); animation: ai-daily-toast-lifecycle 3.2s ease both; }
 .ai-daily-message button { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 17px; }
 
-.ai-daily-detail-backdrop { position: fixed; inset: 0; z-index: 2; display: flex; justify-content: flex-end; background: var(--dsw-alias-bg-mask-1); backdrop-filter: var(--dsw-mask-blur); }
+.ai-daily-detail-backdrop { position: fixed; inset: 0; z-index: 6; display: flex; justify-content: flex-end; background: var(--dsw-alias-bg-mask-1); backdrop-filter: var(--dsw-mask-blur); }
 .ai-daily-detail { width: min(600px, calc(100vw - 24px)); height: 100%; overflow: auto; box-sizing: border-box; padding: 26px; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-prominent); }
 .ai-daily-detail-head { display: flex; justify-content: space-between; gap: 18px; }
 .ai-daily-detail-meta { margin: 0 0 10px; }

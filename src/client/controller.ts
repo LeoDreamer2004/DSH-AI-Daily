@@ -9,6 +9,11 @@ import type {
   DashboardOperationStatus,
   DashboardSnapshot,
 } from '../dashboard/types.js'
+import {
+  AI_DAILY_RPC_CHANNEL,
+  aiDailyRpcMethod,
+  type AiDailyRpcEndpoint,
+} from '../dashboard/protocol.js'
 
 const articleIdSchema = z.string().regex(/^[a-f0-9]{64}$/).transform(value => value as ArticleId)
 const sourceSchema = z.enum(['aiera', 'jiqizhixin', 'qbitai'])
@@ -110,7 +115,6 @@ const operationStatusSchema = z.object({
   progress: progressSchema.nullable(),
   snapshot: snapshotSchema,
 }).strict()
-const RPC_CHANNEL = '/ai-daily'
 const INITIAL_PAGE_SIZE = 50
 const PAGE_INCREMENT = 50
 const PROGRESS_POLL_INTERVAL_MS = 500
@@ -408,8 +412,8 @@ export class DashboardController {
     }
   }
 
-  private async call(endpoint: string, payload: object): Promise<unknown> {
-    const result = await this.rpc.call(RPC_CHANNEL, endpoint, payload)
+  private async call(endpoint: AiDailyRpcEndpoint, payload: object): Promise<unknown> {
+    const result = await this.rpc.call(AI_DAILY_RPC_CHANNEL, aiDailyRpcMethod(endpoint), payload)
     if (!result.ok) throw new Error(result.error.message)
     return result.value
   }

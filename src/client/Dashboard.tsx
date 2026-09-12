@@ -595,7 +595,9 @@ export function DashboardOverlay(props: DashboardOverlayProps) {
   return (
     <div className={css.backdrop} onClick={closeDashboard}>
       <section className={css.dialog} role="dialog" aria-modal="true" aria-labelledby="ai-daily-title" onClick={(event) => { event.stopPropagation() }}>
-        <button ref={closeRef} type="button" className={clsx(css.button, css.close, css.dialogClose)} aria-label={t('close')} onClick={closeDashboard}><IconCloseOutline16 /></button>
+        {state.selected === undefined
+          ? <button ref={closeRef} type="button" className={clsx(css.button, css.close, css.dialogClose)} aria-label={t('close')} onClick={closeDashboard}><IconCloseOutline16 /></button>
+          : null}
         <main className={css.main} aria-busy={busy}>
           {state.error !== undefined
             ? (
