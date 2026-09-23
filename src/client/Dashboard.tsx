@@ -8,8 +8,8 @@ import {
 } from 'react'
 import clsx from 'clsx'
 import {
-  IconCloseOutline16,
-  LinkIcon,
+  IconCloseOutlineRegular,
+  LinkIconRegular,
   MarkdownText,
   type MarkdownLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -70,7 +70,7 @@ function OriginalLink({ url, compact = false, t }: {
 }) {
   return (
     <a className={clsx(css.link, css.originalLink, compact && css.originalLinkCompact)} href={url} target="_blank" rel="noopener noreferrer">
-      <LinkIcon kind="url" size={12} />
+      <LinkIconRegular kind="url" size={12} />
       {t('article.original')}
     </a>
   )
@@ -221,7 +221,7 @@ function ArticleDetail({ article, actions, state, onClose, t }: {
             <h2 className={css.detailTitle}>{article.title}</h2>
           </div>
           <div className={css.detailActions}>
-            <button ref={closeRef} type="button" className={clsx(css.button, css.close)} aria-label={t('article.close')} onClick={onClose}><IconCloseOutline16 /></button>
+            <button ref={closeRef} type="button" className={clsx(css.button, css.close)} aria-label={t('article.close')} onClick={onClose}><IconCloseOutlineRegular /></button>
           </div>
         </header>
         {duplicate
@@ -470,7 +470,7 @@ function QueueRow({ article, state, t }: {
           <span>{displayTime(article.publishedAt, t)}</span>
         </div>
         <a className={clsx(css.link, css.originalLinkCompact)} href={article.url} target="_blank" rel="noopener noreferrer">
-          <LinkIcon kind="url" size={12} />{t('article.original')}
+          <LinkIconRegular kind="url" size={12} />{t('article.original')}
         </a>
       </div>
       {active ? <span className={css.queueProgress} aria-hidden="true" /> : null}
@@ -596,13 +596,13 @@ export function DashboardOverlay(props: DashboardOverlayProps) {
     <div className={css.backdrop} onClick={closeDashboard}>
       <section className={css.dialog} role="dialog" aria-modal="true" aria-labelledby="ai-daily-title" onClick={(event) => { event.stopPropagation() }}>
         {state.selected === undefined
-          ? <button ref={closeRef} type="button" className={clsx(css.button, css.close, css.dialogClose)} aria-label={t('close')} onClick={closeDashboard}><IconCloseOutline16 /></button>
+          ? <button ref={closeRef} type="button" className={clsx(css.button, css.close, css.dialogClose)} aria-label={t('close')} onClick={closeDashboard}><IconCloseOutlineRegular /></button>
           : null}
         <main className={css.main} aria-busy={busy}>
           {state.error !== undefined
             ? (
               <div className={clsx(css.message, css.messageError)} role="alert">
-                <span>{state.error === '' ? t('error.generic') : state.error}</span><button type="button" aria-label={t('message.dismiss')} onClick={dismissMessage}><IconCloseOutline16 /></button>
+                <span>{state.error === '' ? t('error.generic') : state.error}</span><button type="button" aria-label={t('message.dismiss')} onClick={dismissMessage}><IconCloseOutlineRegular /></button>
               </div>
             )
             : null}
@@ -610,7 +610,7 @@ export function DashboardOverlay(props: DashboardOverlayProps) {
             ? null
             : (
               <div className={clsx(css.message, css.toast)} role="status" aria-live="polite">
-                <span>{toast}</span><button type="button" aria-label={t('message.dismiss')} onClick={dismissMessage}><IconCloseOutline16 /></button>
+                <span>{toast}</span><button type="button" aria-label={t('message.dismiss')} onClick={dismissMessage}><IconCloseOutlineRegular /></button>
               </div>
             )}
           {state.activity === 'loading' && snapshot === undefined

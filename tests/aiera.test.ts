@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WebFetchResult } from '@deepseek-ai/dsh-web'
 import {
   AieraSource,
@@ -59,6 +59,10 @@ describe('parseAieraFeed', () => {
 })
 
 describe('AieraSource', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('discovers entries and retrieves normalized article content through WebRuntime', async () => {
     const xml = await readFile(feedFixtureUrl, 'utf8')
     const html = await readFile(articleFixtureUrl, 'utf8')
@@ -128,6 +132,118 @@ describe('AieraSource', () => {
     })
     expect(document.content).toBe('Full evidence from the official article API.')
     expect(document.content).not.toContain('正在取这篇稿子')
+  })
+
+  it('recognizes the placeholder when page chrome and the article title surround it', async () => {
+    const article = (await parseFixtureArticles())[0]
+    if (article === undefined) throw new Error('fixture did not yield an article')
+    const requests: string[] = []
+    const source = new AieraSource({
+      fetch: async request => {
+        requests.push(request.url)
+        if (request.url === article.canonicalUrl) {
+          return response([
+            '<main id="postWrap">',
+            '<div class="pkick">Apocalypse · ASI</div>',
+            `<h1>${article.title}</h1>`,
+            '<p class="pstate">正在取这篇稿子…</p>',
+            '</main>',
+          ].join(''), 'html')
+        }
+        return response(JSON.stringify({
+          id: 100,
+          title: { rendered: article.title },
+          content: { rendered: '<p>The complete article body.</p>' },
+        }))
+      },
+    }, {
+      feedUrl,
+      maxFeedItems: 10,
+      maxArticleChars: 10_000,
+      requestTimeoutMs: 5_000,
+    })
+
+    await expect(source.read(article)).resolves.toMatchObject({
+      content: 'The complete article body.',
+    })
+    expect(requests).toEqual([
+      article.canonicalUrl,
+      'https://aiera.com.cn/wp-json/wp/v2/posts/100?_embed=1',
+    ])
+  })
+
+  it('waits and polls the article API while its content is still a placeholder', async () => {
+    vi.useFakeTimers()
+    const article = (await parseFixtureArticles())[0]
+    if (article === undefined) throw new Error('fixture did not yield an article')
+    const requests: string[] = []
+    let apiCalls = 0
+    const source = new AieraSource({
+      fetch: async request => {
+        requests.push(request.url)
+        if (request.url === article.canonicalUrl) {
+          return response('<main>正在取这篇稿子…</main>', 'html')
+        }
+        apiCalls += 1
+        return response(JSON.stringify({
+          id: 100,
+          title: { rendered: article.title },
+          content: {
+            rendered: apiCalls < 3
+              ? '<p>正在取这篇稿子…</p>'
+              : '<p>The article became ready.</p>',
+          },
+        }))
+      },
+    }, {
+      feedUrl,
+      maxFeedItems: 10,
+      maxArticleChars: 10_000,
+      requestTimeoutMs: 5_000,
+    })
+
+    const pending = source.read(article)
+    await vi.advanceTimersByTimeAsync(1_500)
+
+    await expect(pending).resolves.toMatchObject({ content: 'The article became ready.' })
+    expect(requests).toEqual([
+      article.canonicalUrl,
+      'https://aiera.com.cn/wp-json/wp/v2/posts/100?_embed=1',
+      'https://aiera.com.cn/wp-json/wp/v2/posts/100?_embed=1&_ai_daily_retry=1',
+      'https://aiera.com.cn/wp-json/wp/v2/posts/100?_embed=1&_ai_daily_retry=2',
+    ])
+  })
+
+  it('stops polling after the bounded readiness window expires', async () => {
+    vi.useFakeTimers()
+    const article = (await parseFixtureArticles())[0]
+    if (article === undefined) throw new Error('fixture did not yield an article')
+    let apiCalls = 0
+    const source = new AieraSource({
+      fetch: async request => {
+        if (request.url !== article.canonicalUrl) apiCalls += 1
+        return request.url === article.canonicalUrl
+          ? response('<main>正在取这篇稿子…</main>', 'html')
+          : response(JSON.stringify({
+              id: 100,
+              title: { rendered: article.title },
+              content: { rendered: '<p>正在取这篇稿子…</p>' },
+            }))
+      },
+    }, {
+      feedUrl,
+      maxFeedItems: 10,
+      maxArticleChars: 10_000,
+      requestTimeoutMs: 5_000,
+    })
+
+    const assertion = expect(source.read(article)).rejects.toMatchObject({
+      code: 'CONTENT_NOT_READY',
+    })
+    await vi.advanceTimersByTimeAsync(3_500)
+
+    await assertion
+    expect(apiCalls).toBe(4)
   })
 
   it('keeps a placeholder article out of model analysis when the official API is truncated', async () => {
@@ -211,9 +327,10 @@ describe('AieraSource', () => {
 })
 
 describe('Aiera dynamic article parsing', () => {
-  it('recognizes only loading-placeholder bodies', () => {
+  it('recognizes loading-placeholder markers within extracted page text', () => {
     expect(isAieraPlaceholderContent('正在取这篇稿子…')).toBe(true)
     expect(isAieraPlaceholderContent(' 正在加载这篇文章... ')).toBe(true)
+    expect(isAieraPlaceholderContent('Section name\nArticle title\n正在取这篇稿子…')).toBe(true)
     expect(isAieraPlaceholderContent('The article discusses the loading placeholder.')).toBe(false)
   })
 

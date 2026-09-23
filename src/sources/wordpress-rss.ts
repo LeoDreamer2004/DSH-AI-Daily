@@ -19,6 +19,7 @@ export type WordPressRssSourceErrorCode =
   | 'INVALID_FEED'
   | 'INVALID_RESPONSE'
   | 'EMPTY_CONTENT'
+  | 'CONTENT_NOT_READY'
   | 'TRUNCATED_RESPONSE'
 
 /** Error raised when a WordPress RSS source cannot be represented safely. */

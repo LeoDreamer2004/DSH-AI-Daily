@@ -1,6 +1,6 @@
 import type { ClientRemote, ModelCatalog, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { AiDailySettings } from '../settings-contract.js'
 import type { ArticleSource } from '../types.js'
 
@@ -27,7 +27,7 @@ export interface SettingsPageInjected {
 
 type ModelCatalogRemote = Pick<ClientRemote['session'], 'modelCatalog'>
 
-/** Bridge Harness's settings scope and global model directory into one page state. */
+/** Bridge Harness's config form and global model directory into one page state. */
 export class SettingsPageController {
   readonly store: SnapshotStore<SettingsPageState>
   private readonly unsubscribe: () => void
@@ -41,7 +41,7 @@ export class SettingsPageController {
   private disposed = false
 
   constructor(
-    private readonly scope: SettingsScope<AiDailySettings>,
+    private readonly scope: ConfigForm<AiDailySettings>,
     private readonly remote: ModelCatalogRemote,
   ) {
     this.store = createSnapshotStore(this.project())
@@ -132,7 +132,7 @@ export class SettingsPageController {
 
   private async write(
     optimistic: AiDailySettings,
-    operation: () => Promise<void>,
+    operation: () => Promise<boolean>,
     accepted: (settings: AiDailySettings) => boolean,
   ): Promise<void> {
     if (this.disposed || !this.scope.getSnapshot().writable) return
@@ -141,10 +141,10 @@ export class SettingsPageController {
     this.writeFailed = false
     this.publish()
     try {
-      await operation()
+      const applied = await operation()
       if (this.disposed || generation !== this.writeGeneration) return
       const value = this.scope.getSnapshot().value
-      this.writeFailed = value === undefined || !accepted(value)
+      this.writeFailed = !applied || value === undefined || !accepted(value)
     } catch {
       if (this.disposed || generation !== this.writeGeneration) return
       this.writeFailed = true

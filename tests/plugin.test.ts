@@ -11,17 +11,7 @@ describe('AI Daily plugin lifecycle', () => {
     const registeredTools: string[] = []
     const registeredRoutes: string[] = []
     let domainClosed = false
-    const registerSettings = vi.fn(() => ({
-      get: () => ({
-        aiera: true,
-        jiqizhixin: true,
-        qbitai: true,
-        modelProvider: 'deepseek-official',
-        model: 'deepseek-v4-flash',
-      }),
-      watch: () => () => {},
-      update: async () => {},
-    }))
+    const configureSettings = vi.fn((_presentation: { auto?: boolean }, _owner?: unknown) => () => {})
     type AiDailyDomain = Domain<typeof plugin.aiDailyDomainSpec>
     const domain: AiDailyDomain = {
       name: plugin.aiDailyDomainSpec.name,
@@ -33,7 +23,7 @@ describe('AI Daily plugin lifecycle', () => {
     ctx.provide('web', { fetch: async () => { throw new Error('unexpected fetch') } } as never)
     ctx.provide('llm', { stream: () => { throw new Error('unexpected model call') } } as never)
     ctx.provide('storageDomain', { open: async () => domain } as never)
-    ctx.provide('settings', { register: registerSettings } as never)
+    ctx.provide('settings', { configure: configureSettings } as never)
     ctx.provide('tools', {
       register: (definition: { name: string }) => {
         registeredTools.push(definition.name)
@@ -52,20 +42,7 @@ describe('AI Daily plugin lifecycle', () => {
     const fiber = await ctx.plugin(plugin, { automaticRefresh: false })
 
     expect(ctx.aiDaily.dailyDigest('2026-09-06').articles).toEqual([])
-    expect(registerSettings).toHaveBeenCalledWith(
-      'ai-daily',
-      expect.anything(),
-      {
-        base: {
-          aiera: true,
-          jiqizhixin: true,
-          qbitai: true,
-          modelProvider: 'deepseek-official',
-          model: 'deepseek-v4-flash',
-        },
-        applies: 'live',
-      },
-    )
+    expect(configureSettings.mock.calls[0]?.[0]).toEqual({ auto: false })
     expect(registeredTools).toEqual(['ai_daily_refresh', 'ai_daily_digest', 'ai_daily_read'])
     expect(registeredRoutes).toEqual(plugin.AI_DAILY_RPC_ENDPOINTS.map(plugin.aiDailyRpcPath))
     await fiber.dispose()

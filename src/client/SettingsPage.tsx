@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo } from 'react'
-import { IconRefreshOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import type { InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -169,7 +169,7 @@ export function SettingsPage(props: SettingsPageProps) {
             disabled={state.catalogStatus === 'loading'}
             onClick={loadCatalog}
           >
-            <IconRefreshOutline16 />
+            <IconRefreshOutlineRegular />
             {t('settings.model.reload')}
           </button>
         </div>

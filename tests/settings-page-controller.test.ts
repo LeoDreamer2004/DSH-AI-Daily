@@ -1,10 +1,10 @@
-import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { describe, expect, it, vi } from 'vitest'
 import { SettingsPageController } from '../src/client/settings-page-controller.js'
 import type { AiDailySettings } from '../src/settings-contract.js'
 
-function memoryScope(initial: AiDailySettings): SettingsScope<AiDailySettings> {
-  let snapshot: SettingsScopeSnapshot<AiDailySettings> = {
+function memoryScope(initial: AiDailySettings): ConfigForm<AiDailySettings> {
+  let snapshot: ConfigFormSnapshot<AiDailySettings> = {
     status: 'ready',
     value: initial,
     base: initial,
@@ -21,11 +21,12 @@ function memoryScope(initial: AiDailySettings): SettingsScope<AiDailySettings> {
   return {
     getSnapshot: () => snapshot,
     subscribe: (listener) => { listeners.add(listener); return () => { listeners.delete(listener) } },
-    set: async (field, value) => { publish({ ...snapshot.value, [field]: value } as AiDailySettings) },
+    set: async (field, value) => { publish({ ...snapshot.value, [field]: value } as AiDailySettings); return true },
     unset: async (field) => {
       const next = { ...snapshot.value } as Record<string, unknown>
       delete next[field]
       publish(next as unknown as AiDailySettings)
+      return true
     },
     mutate: async (ops) => {
       const next = { ...snapshot.value } as Record<string, unknown>
@@ -36,6 +37,7 @@ function memoryScope(initial: AiDailySettings): SettingsScope<AiDailySettings> {
         else delete next[field]
       }
       publish(next as unknown as AiDailySettings)
+      return true
     },
   }
 }
@@ -53,11 +55,11 @@ describe('SettingsPageController', () => {
     let release!: () => void
     const pending = new Promise<void>((resolve) => { release = resolve })
     const originalSet = base.set.bind(base)
-    const scope: SettingsScope<AiDailySettings> = {
+    const scope: ConfigForm<AiDailySettings> = {
       ...base,
       set: async (field, value) => {
         await pending
-        await originalSet(field, value)
+        return originalSet(field, value)
       },
     }
     const controller = new SettingsPageController(scope, {
@@ -113,6 +115,29 @@ describe('SettingsPageController', () => {
         },
       })
     })
+    controller.dispose()
+  })
+
+  it('reports a Host-refused source change', async () => {
+    const base = memoryScope({
+      aiera: true,
+      jiqizhixin: true,
+      qbitai: true,
+      modelProvider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+    })
+    const scope: ConfigForm<AiDailySettings> = {
+      ...base,
+      set: async () => false,
+    }
+    const controller = new SettingsPageController(scope, {
+      modelCatalog: vi.fn(),
+    } as never)
+
+    controller.inject().setSourceEnabled('qbitai', false)
+
+    await vi.waitFor(() => { expect(controller.store.getSnapshot().writeFailed).toBe(true) })
+    expect(controller.store.getSnapshot().settings?.qbitai).toBe(true)
     controller.dispose()
   })
 })

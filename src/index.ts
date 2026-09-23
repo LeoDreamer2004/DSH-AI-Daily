@@ -1,7 +1,8 @@
 /** AI Daily service plugin for DeepSeek Harness. */
 
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/cordis-plugin-timer'
 import type {} from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-storage-domain'
@@ -11,11 +12,7 @@ import type {} from '@deepseek-ai/dsh-web'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import { registerDashboardRpc } from './dashboard/rpc.js'
 import { installAutomaticRefresh } from './scheduler.js'
-import {
-  AI_DAILY_SETTINGS_NAMESPACE,
-  AiDailySettingsSchema,
-  sourceSettingsOf,
-} from './settings.js'
+import type { AiDailySettings } from './settings.js'
 import { AiDailyService } from './service.js'
 import { ArticleRepository } from './storage/repository.js'
 import { registerAiDailyTools } from './tools.js'
@@ -56,16 +53,16 @@ export const inject = ['web', 'storageDomain', 'settings', 'llm', 'tools', 'time
 export interface Config {
   /** Aiera WordPress RSS feed URL. */
   readonly aieraFeedUrl?: string
-  /** Whether Aiera discovery is enabled by default. */
-  readonly aieraEnabled?: boolean
+  /** Whether Aiera discovery is enabled. */
+  readonly aiera?: boolean
   /** Machine Heart public article-library listing API URL. */
   readonly jiqizhixinApiUrl?: string
-  /** Whether Machine Heart discovery is enabled by default. */
-  readonly jiqizhixinEnabled?: boolean
+  /** Whether Machine Heart discovery is enabled. */
+  readonly jiqizhixin?: boolean
   /** QbitAI WordPress RSS feed URL. */
   readonly qbitFeedUrl?: string
-  /** Whether QbitAI discovery is enabled by default. */
-  readonly qbitaiEnabled?: boolean
+  /** Whether QbitAI discovery is enabled. */
+  readonly qbitai?: boolean
   /** Maximum feed entries considered by one scan. */
   readonly maxFeedItems?: number
   /** Maximum normalized characters returned for one article. */
@@ -76,6 +73,8 @@ export interface Config {
   readonly modelProvider?: string
   /** Harness model id used for article analysis. */
   readonly model?: string
+  /** Optional reasoning effort for article analysis. */
+  readonly reasoningEffort?: string
   /** Maximum output tokens for one article analysis. */
   readonly maxAnalysisTokens?: number
   /** End-to-end timeout for one article analysis. */
@@ -95,17 +94,25 @@ export interface Config {
 }
 
 /** Runtime validation and defaults for plugin configuration. */
-type ResolvedConfig = Required<Config>
+type DefaultConfig = Required<Omit<Config, 'reasoningEffort'>>
+type RuntimeConfig = Omit<DefaultConfig, 'aiera' | 'jiqizhixin' | 'qbitai' | 'modelProvider' | 'model'> & {
+  aiera: Volatile<boolean>
+  jiqizhixin: Volatile<boolean>
+  qbitai: Volatile<boolean>
+  modelProvider: Volatile<string>
+  model: Volatile<string>
+  reasoningEffort: Volatile<string | undefined>
+}
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647
 
-const DEFAULT_CONFIG: ResolvedConfig = {
+const DEFAULT_CONFIG: DefaultConfig = {
   aieraFeedUrl: 'https://aiera.com.cn/feed/',
-  aieraEnabled: true,
+  aiera: true,
   jiqizhixinApiUrl: 'https://www.jiqizhixin.com/api/article_library/articles.json?sort=time&page=1',
-  jiqizhixinEnabled: true,
+  jiqizhixin: true,
   qbitFeedUrl: 'https://www.qbitai.com/feed/',
-  qbitaiEnabled: true,
+  qbitai: true,
   maxFeedItems: 50,
   maxArticleChars: 50_000,
   requestTimeoutMs: 30_000,
@@ -121,18 +128,19 @@ const DEFAULT_CONFIG: ResolvedConfig = {
   schedulerCheckIntervalMs: 60_000,
 }
 
-export const Config: Schema<Config> = Schema.object({
+export const Config = Schema.object({
   aieraFeedUrl: Schema.string().default(DEFAULT_CONFIG.aieraFeedUrl),
-  aieraEnabled: Schema.boolean().default(DEFAULT_CONFIG.aieraEnabled),
+  aiera: Schema.boolean().default(DEFAULT_CONFIG.aiera).volatile(),
   jiqizhixinApiUrl: Schema.string().default(DEFAULT_CONFIG.jiqizhixinApiUrl),
-  jiqizhixinEnabled: Schema.boolean().default(DEFAULT_CONFIG.jiqizhixinEnabled),
+  jiqizhixin: Schema.boolean().default(DEFAULT_CONFIG.jiqizhixin).volatile(),
   qbitFeedUrl: Schema.string().default(DEFAULT_CONFIG.qbitFeedUrl),
-  qbitaiEnabled: Schema.boolean().default(DEFAULT_CONFIG.qbitaiEnabled),
+  qbitai: Schema.boolean().default(DEFAULT_CONFIG.qbitai).volatile(),
   maxFeedItems: Schema.number().default(DEFAULT_CONFIG.maxFeedItems),
   maxArticleChars: Schema.number().default(DEFAULT_CONFIG.maxArticleChars),
   requestTimeoutMs: Schema.number().default(DEFAULT_CONFIG.requestTimeoutMs),
-  modelProvider: Schema.string().default(DEFAULT_CONFIG.modelProvider),
-  model: Schema.string().default(DEFAULT_CONFIG.model),
+  modelProvider: Schema.string().min(1).default(DEFAULT_CONFIG.modelProvider).volatile(),
+  model: Schema.string().min(1).default(DEFAULT_CONFIG.model).volatile(),
+  reasoningEffort: Schema.string().volatile(),
   maxAnalysisTokens: Schema.number().default(DEFAULT_CONFIG.maxAnalysisTokens),
   modelTimeoutMs: Schema.number().default(DEFAULT_CONFIG.modelTimeoutMs),
   maxArticlesPerRefresh: Schema.number().default(DEFAULT_CONFIG.maxArticlesPerRefresh),
@@ -141,7 +149,7 @@ export const Config: Schema<Config> = Schema.object({
   dailyHour: Schema.number().default(DEFAULT_CONFIG.dailyHour),
   dailyMinute: Schema.number().default(DEFAULT_CONFIG.dailyMinute),
   schedulerCheckIntervalMs: Schema.number().default(DEFAULT_CONFIG.schedulerCheckIntervalMs),
-})
+}) as Schema<Config, RuntimeConfig>
 
 function assertPositiveInteger(name: string, value: number): void {
   if (!Number.isSafeInteger(value) || value < 1) {
@@ -150,8 +158,7 @@ function assertPositiveInteger(name: string, value: number): void {
 }
 
 /** Open durable state and provide the AI Daily service. */
-export async function apply(ctx: Context, config: Config): Promise<void> {
-  const resolved: ResolvedConfig = { ...DEFAULT_CONFIG, ...config }
+export async function apply(ctx: Context, resolved: ReturnType<typeof Config>): Promise<void> {
   assertPositiveInteger('maxFeedItems', resolved.maxFeedItems)
   assertPositiveInteger('maxArticleChars', resolved.maxArticleChars)
   assertPositiveInteger('requestTimeoutMs', resolved.requestTimeoutMs)
@@ -164,39 +171,50 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   assertMaximum('schedulerCheckIntervalMs', resolved.schedulerCheckIntervalMs, MAX_TIMER_DELAY_MS)
   assertRange('dailyHour', resolved.dailyHour, 0, 23)
   assertRange('dailyMinute', resolved.dailyMinute, 0, 59)
-  assertNonEmpty('modelProvider', resolved.modelProvider)
-  assertNonEmpty('model', resolved.model)
+  assertNonEmpty('modelProvider', resolved.modelProvider.get())
+  assertNonEmpty('model', resolved.model.get())
   assertTimeZone(resolved.timeZone)
   canonicalFeedUrl('aieraFeedUrl', resolved.aieraFeedUrl)
   canonicalFeedUrl('jiqizhixinApiUrl', resolved.jiqizhixinApiUrl)
   canonicalFeedUrl('qbitFeedUrl', resolved.qbitFeedUrl)
 
-  const settings = ctx.settings.register(
-    AI_DAILY_SETTINGS_NAMESPACE,
-    AiDailySettingsSchema,
-    {
-      base: {
-        aiera: resolved.aieraEnabled,
-        jiqizhixin: resolved.jiqizhixinEnabled,
-        qbitai: resolved.qbitaiEnabled,
-        modelProvider: resolved.modelProvider,
-        model: resolved.model,
-      },
-      applies: 'live',
-    },
-  )
+  ctx.effect(() => ctx.settings.configure({ auto: false }, ctx.fiber), 'ai-daily: custom settings page')
+  const currentSettings = (): AiDailySettings => {
+    const reasoningEffort = resolved.reasoningEffort.get()
+    return {
+      aiera: resolved.aiera.get(),
+      jiqizhixin: resolved.jiqizhixin.get(),
+      qbitai: resolved.qbitai.get(),
+      modelProvider: resolved.modelProvider.get(),
+      model: resolved.model.get(),
+      ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
+    }
+  }
+  const initialSettings = currentSettings()
   const repository = await ArticleRepository.open(ctx.storageDomain)
+  const {
+    aiera: _aiera,
+    jiqizhixin: _jiqizhixin,
+    qbitai: _qbitai,
+    modelProvider: _modelProvider,
+    model: _model,
+    reasoningEffort: _reasoningEffort,
+    ...serviceConfig
+  } = resolved
   const service = new AiDailyService(ctx.web, ctx.llm, repository, {
-    ...resolved,
-    sourceSettings: sourceSettingsOf(settings.get()),
+    ...serviceConfig,
+    modelProvider: initialSettings.modelProvider,
+    model: initialSettings.model,
+    ...(initialSettings.reasoningEffort === undefined ? {} : { reasoningEffort: initialSettings.reasoningEffort }),
+    sourceSettings: {
+      aiera: initialSettings.aiera,
+      jiqizhixin: initialSettings.jiqizhixin,
+      qbitai: initialSettings.qbitai,
+    },
   }, undefined, undefined, ctx.logger)
-  service.setSettings(settings.get())
   ctx.provide('aiDaily', service)
   ctx.effect(() => () => service.close(), 'ai-daily.close()')
-  ctx.effect(
-    () => settings.watch(next => { service.setSettings(next) }),
-    'ai-daily: live settings',
-  )
+  ctx.on('loader/volatile-update', () => { service.setSettings(currentSettings()) })
   registerDashboardRpc(ctx, service)
   registerAiDailyTools(ctx, service, resolved.maxArticlesPerRefresh)
   installAutomaticRefresh(ctx, service, {

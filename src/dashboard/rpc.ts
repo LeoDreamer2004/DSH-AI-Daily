@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import {
   clientRequestSchema,
   type ConnectionFetchHandler,
-  type ConnectionRpcHandler,
+  type ConnectionRpcHandlerResult,
   type ServerResponse,
 } from '@deepseek-ai/dsh-client-connection'
 import { z } from 'zod'
@@ -28,6 +28,11 @@ import type {
 const MAX_PAGE_SIZE = 100
 const DEFAULT_PAGE_SIZE = 50
 const ARTICLE_ID_PATTERN = /^[a-f0-9]{64}$/
+type DashboardHandler = (
+  endpoint: string,
+  payload: unknown,
+  signal: AbortSignal,
+) => Promise<ConnectionRpcHandlerResult>
 
 const snapshotRequestSchema = z.object({
   date: z.string().optional(),
@@ -178,7 +183,7 @@ function failure(error: unknown): {
   }
 }
 
-function dashboardHandler(service: AiDailyService): ConnectionRpcHandler {
+function dashboardHandler(service: AiDailyService): DashboardHandler {
   return async (endpoint, payload, signal) => {
     try {
       if (endpoint === 'snapshot') {
@@ -246,7 +251,7 @@ function dashboardHandler(service: AiDailyService): ConnectionRpcHandler {
 }
 
 function dashboardFetchHandler(
-  handler: ConnectionRpcHandler,
+  handler: DashboardHandler,
   endpoint: AiDailyRpcEndpoint,
 ): ConnectionFetchHandler['fetch'] {
   const expectedMethod = aiDailyRpcMethod(endpoint)

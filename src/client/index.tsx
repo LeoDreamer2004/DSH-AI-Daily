@@ -16,14 +16,14 @@ import { SettingsPage } from './SettingsPage.js'
 import { SettingsPageController } from './settings-page-controller.js'
 
 /** Client services and slots required by the dashboard contribution. */
-export const inject = ['connection', 'slots', 'locale', 'remote', 'remote.session', 'settingsScope']
+export const inject = ['connection', 'slots', 'locale', 'remote', 'remote.session', 'configForms']
 
 /** Register the sidebar trigger and full-screen dashboard overlay. */
 export function apply(ctx: ClientContext): void {
   const connection = ctx.get('connection') as ConnectionHandle
   const controller = new DashboardController(connection.rpc)
   const settings = new SettingsPageController(
-    ctx.settingsScope.bind<AiDailySettings>({ namespace: AI_DAILY_SETTINGS_NAMESPACE }),
+    ctx.configForms.get<AiDailySettings>(AI_DAILY_SETTINGS_NAMESPACE),
     ctx.remote.session,
   )
   const injectDashboard = () => controller.inject()

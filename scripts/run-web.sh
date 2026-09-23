@@ -41,7 +41,7 @@ printf '%s\n' \
   '    maxBodyChars: 1000000' \
   '' \
   '- insert:' \
-  '    - id: local-ai-daily' \
+  '    - id: ai-daily' \
   "      name: $plugin_entry" \
   '      config:' \
   "        automaticRefresh: $automatic_refresh" \

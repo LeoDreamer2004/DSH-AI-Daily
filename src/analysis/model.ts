@@ -4,6 +4,12 @@ import { z } from 'zod'
 import { dateInTimeZone } from '../digest.js'
 import type { ArticleAnalysis, ArticleDocument, ArticleId, PeerNewsContext } from '../types.js'
 
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'ai-daily': { kind: 'ai-daily' }
+  }
+}
+
 const articleIdSchema = z.string().regex(/^[a-f0-9]{64}$/)
 
 const duplicateIdsSchema = z.array(articleIdSchema).max(20).refine(
@@ -175,7 +181,7 @@ export class LlmArticleAnalyzer implements ArticleAnalysisEngine {
     const assembler = new BlockAssembler()
     const messages = [createUserMessage({
       content: [{ type: 'text', text: articlePrompt(article, peerNews) }],
-      source: { kind: 'plugin', plugin: 'dsh-ai-daily' },
+      source: { kind: 'ai-daily' },
     })]
     for await (const chunk of this.llm.stream({
       provider: this.config.provider,

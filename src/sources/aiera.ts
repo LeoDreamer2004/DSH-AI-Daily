@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { setTimeout as delay } from 'node:timers/promises'
 import type { WebRuntime } from '@deepseek-ai/dsh-web'
 import { z } from 'zod'
 import { htmlToText } from '../extraction/html.js'
@@ -28,6 +29,8 @@ const AIERA_DESCRIPTOR = {
 } as const
 
 const AIERA_ORIGIN = 'https://aiera.com.cn'
+const AIERA_POST_READY_ATTEMPTS = 4
+const AIERA_POST_RETRY_DELAY_MS = 500
 
 const aieraPostSchema = z.object({
   id: z.number().int().positive(),
@@ -70,10 +73,10 @@ function normalizedPostInstant(dateGmt: string | undefined, date: string | undef
   return Number.isNaN(timestamp) ? undefined : new Date(timestamp).toISOString()
 }
 
-/** Return whether an extracted Aiera body is only the site's client-rendering placeholder. */
+/** Return whether an extracted Aiera body still contains the site's client-rendering placeholder. */
 export function isAieraPlaceholderContent(content: string): boolean {
   const normalized = content.replace(/\s+/g, '')
-  return /^正在(?:取|获取|加载)这篇(?:稿子|文章)(?:\.{3}|…|。)*$/u.test(normalized)
+  return /正在(?:取|获取|加载)这篇(?:稿子|文章)(?:\.{3}|…|。)*/u.test(normalized)
 }
 
 /** Parse an official Aiera WordPress post response into a model-safe document. */
@@ -107,10 +110,16 @@ export function parseAieraPost(
   }
 
   const completeContent = htmlToText(parsed.data.content.rendered, Number.MAX_SAFE_INTEGER)
-  if (completeContent === '' || isAieraPlaceholderContent(completeContent)) {
+  if (completeContent === '') {
     throw new WordPressRssSourceError(
       'EMPTY_CONTENT',
       'Aiera article API contains no readable article text',
+    )
+  }
+  if (isAieraPlaceholderContent(completeContent)) {
+    throw new WordPressRssSourceError(
+      'CONTENT_NOT_READY',
+      'Aiera article API is still preparing the article text',
     )
   }
   const title = htmlToText(parsed.data.title.rendered, 500)
@@ -165,20 +174,40 @@ export class AieraSource {
         'Aiera article page contains a loading placeholder but its WordPress post id is unavailable',
       )
     }
-    const response = await this.fetch(`${AIERA_ORIGIN}/wp-json/wp/v2/posts/${postId}?_embed=1`, signal)
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw new WordPressRssSourceError(
-        'HTTP_ERROR',
-        `Aiera article API returned HTTP ${response.statusCode}`,
-      )
+    return this.readPostWhenReady(article, postId, signal)
+  }
+
+  private async readPostWhenReady(
+    article: DiscoveredArticle,
+    postId: number,
+    signal?: AbortSignal,
+  ): Promise<ArticleDocument> {
+    const baseUrl = `${AIERA_ORIGIN}/wp-json/wp/v2/posts/${postId}?_embed=1`
+    for (let attempt = 0; attempt < AIERA_POST_READY_ATTEMPTS; attempt += 1) {
+      const url = attempt === 0 ? baseUrl : `${baseUrl}&_ai_daily_retry=${attempt}`
+      const response = await this.fetch(url, signal)
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw new WordPressRssSourceError(
+          'HTTP_ERROR',
+          `Aiera article API returned HTTP ${response.statusCode}`,
+        )
+      }
+      if (response.body.content.trim() === '') {
+        throw new WordPressRssSourceError('EMPTY_CONTENT', 'Aiera article API returned an empty body')
+      }
+      if (response.truncated) {
+        throw new WordPressRssSourceError('TRUNCATED_RESPONSE', 'Aiera article API response was truncated')
+      }
+      try {
+        return parseAieraPost(response.body.content, article, postId, this.config.maxArticleChars)
+      } catch (error) {
+        const contentIsPending = error instanceof WordPressRssSourceError
+          && error.code === 'CONTENT_NOT_READY'
+        if (!contentIsPending || attempt === AIERA_POST_READY_ATTEMPTS - 1) throw error
+      }
+      await delay(AIERA_POST_RETRY_DELAY_MS * 2 ** attempt, undefined, { signal })
     }
-    if (response.body.content.trim() === '') {
-      throw new WordPressRssSourceError('EMPTY_CONTENT', 'Aiera article API returned an empty body')
-    }
-    if (response.truncated) {
-      throw new WordPressRssSourceError('TRUNCATED_RESPONSE', 'Aiera article API response was truncated')
-    }
-    return parseAieraPost(response.body.content, article, postId, this.config.maxArticleChars)
+    throw new Error('unreachable')
   }
 
   private fetch(url: string, signal?: AbortSignal) {
