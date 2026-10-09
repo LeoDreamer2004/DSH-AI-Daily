@@ -6,17 +6,15 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 plugin_dir="$(cd -- "$script_dir/.." && pwd)"
 harness_dir="${DSH_REPO:-$plugin_dir/../deepseek-harness}"
 automatic_refresh="${AI_DAILY_AUTOMATIC_REFRESH:-true}"
-temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dsh-plugin-web.XXXXXX")"
-patch_file="$temporary_dir/cordis.patch.yml"
-
-cleanup() {
-  if [[ "$temporary_dir" == "${TMPDIR:-/tmp}/dsh-plugin-web."* ]]; then
-    rm -rf -- "$temporary_dir"
+profile_name=web
+arguments=("$@")
+for ((index = 0; index < ${#arguments[@]}; index++)); do
+  if [[ "${arguments[index]}" == "--profile" ]]; then
+    profile_name="${arguments[index + 1]:-}"
+  elif [[ "${arguments[index]}" == --profile=* ]]; then
+    profile_name="${arguments[index]#--profile=}"
   fi
-}
-
-trap cleanup EXIT
-
+done
 if [[ ! -f "$harness_dir/package.json" || ! -f "$harness_dir/apps/cli/src/bin.ts" ]]; then
   printf 'Error: DeepSeek Harness source repository not found at: %s\n' "$harness_dir" >&2
   printf 'Set DSH_REPO=/absolute/path/to/deepseek-harness and try again.\n' >&2
@@ -33,22 +31,11 @@ if [[ "$automatic_refresh" != "true" && "$automatic_refresh" != "false" ]]; then
   exit 1
 fi
 
-plugin_entry="$(node -p 'JSON.stringify(process.argv[1])' "$plugin_dir/lib/index.js")"
-printf '%s\n' \
-  '- id: web-fetch-http' \
-  '  config:' \
-  '    maxResponseBytes: 5000000' \
-  '    maxBodyChars: 1000000' \
-  '' \
-  '- insert:' \
-  '    - id: ai-daily' \
-  "      name: $plugin_entry" \
-  '      config:' \
-  "        automaticRefresh: $automatic_refresh" \
-  >"$patch_file"
-
+export AI_DAILY_AUTOMATIC_REFRESH="$automatic_refresh"
 printf 'Starting DSH Web with the local plugin enabled.\n'
 printf 'Keep this terminal open and press Ctrl+C when you are finished.\n\n'
 
 cd -- "$harness_dir"
-pnpm dsh web --patch "$patch_file" "$@"
+# A bundle precedes user settings. Inserting via --patch would shadow saved edits.
+node --import tsx/esm apps/cli/src/bin.ts plugin --profile "$profile_name" add "link:$plugin_dir"
+node --import tsx/esm apps/cli/src/bin.ts web "$@"
