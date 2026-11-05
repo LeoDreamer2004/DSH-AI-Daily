@@ -19,6 +19,7 @@ describe('AI Daily settings page', () => {
     const store = createSnapshotStore<SettingsPageState>({
       status: 'ready',
       settings: {
+        webSearchEnabled: false,
         aiera: true,
         jiqizhixin: true,
         qbitai: true,
@@ -54,12 +55,14 @@ describe('AI Daily settings page', () => {
       useSyncExternalStore(store.subscribe, () => selector(store.getSnapshot()))
     const setSourceEnabled = vi.fn()
     const selectModel = vi.fn()
+    const setWebSearchEnabled = vi.fn()
     const props = {
       close: vi.fn(),
       useAiDailySettings,
       loadCatalog: vi.fn(),
       setSourceEnabled,
       selectModel,
+      setWebSearchEnabled,
       t: translate,
     } as unknown as ComponentProps<typeof SettingsPage>
 
@@ -71,6 +74,7 @@ describe('AI Daily settings page', () => {
       '机器之心',
       '量子位',
       '新智元',
+      null,
     ])
     expect(screen.getByText(/官方 RSS\/API/)).toBeTruthy()
     expect(screen.getByText(/若要让日报使用独立密钥/)).toBeTruthy()
@@ -80,6 +84,11 @@ describe('AI Daily settings page', () => {
 
     fireEvent.click(screen.getAllByRole('switch')[1] as HTMLElement)
     expect(setSourceEnabled).toHaveBeenCalledWith('qbitai', false)
+    const researchSwitch = screen.getByRole('switch', { name: '启用联网搜索' })
+    expect(researchSwitch.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(researchSwitch)
+    expect(setWebSearchEnabled).toHaveBeenCalledWith(true)
+    expect(screen.getByText(/可能产生搜索费用/)).toBeTruthy()
 
     fireEvent.change(modelSelect, {
       target: { value: JSON.stringify(['openai-news', 'gpt-news']) },

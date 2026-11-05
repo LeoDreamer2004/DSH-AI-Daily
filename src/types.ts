@@ -149,7 +149,7 @@ export interface DailyAnalysisResult {
 export type DailyOperation = 'crawl' | 'summarize' | 'retry-failures' | 'refresh' | 'reanalyze'
 
 /** Observable stage of the currently executing background operation. */
-export type DailyOperationPhase = 'discovering' | 'reading' | 'analyzing' | 'saving' | 'finalizing'
+export type DailyOperationPhase = 'discovering' | 'reading' | 'searching' | 'fetching' | 'analyzing' | 'saving' | 'finalizing'
 
 /** Read-only progress snapshot for one active background operation. */
 export interface DailyOperationProgress {

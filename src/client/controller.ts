@@ -103,7 +103,7 @@ const analysisResultSchema = z.object({
 }).strict()
 const progressSchema = z.object({
   operation: z.enum(['crawl', 'summarize', 'retry-failures', 'refresh', 'reanalyze']),
-  phase: z.enum(['discovering', 'reading', 'analyzing', 'saving', 'finalizing']),
+  phase: z.enum(['discovering', 'reading', 'searching', 'fetching', 'analyzing', 'saving', 'finalizing']),
   startedAt: z.string(),
   completedArticles: z.number().int().min(0),
   totalArticles: z.number().int().min(0),

@@ -1,8 +1,9 @@
 import { BlockAssembler, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { FinishReason, LlmRuntime } from '@deepseek-ai/dsh-llm'
+import type { FinishReason, LlmRuntime, RequestMessage } from '@deepseek-ai/dsh-llm'
 import { z } from 'zod'
 import { dateInTimeZone } from '../digest.js'
 import type { ArticleAnalysis, ArticleDocument, ArticleId, PeerNewsContext } from '../types.js'
+import { ArticleResearchError, ArticleResearchSession, type ArticleResearchAccess } from './research.js'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -164,6 +165,7 @@ export class LlmArticleAnalyzer implements ArticleAnalysisEngine {
     private readonly llm: Pick<LlmRuntime, 'stream'>,
     private readonly config: ArticleAnalyzerConfig,
     private readonly clock: () => Date = () => new Date(),
+    private readonly research?: ArticleResearchAccess,
   ) {}
 
   /** Analyze one article through the configured model route. */
@@ -178,33 +180,55 @@ export class LlmArticleAnalyzer implements ArticleAnalysisEngine {
       : AbortSignal.any([signal, timeoutSignal])
     operationSignal.throwIfAborted()
 
-    const assembler = new BlockAssembler()
-    const messages = [createUserMessage({
+    const research = this.research === undefined ? undefined : new ArticleResearchSession(this.research)
+    const messages: RequestMessage[] = [createUserMessage({
       content: [{ type: 'text', text: articlePrompt(article, peerNews) }],
       source: { kind: 'ai-daily' },
     })]
-    for await (const chunk of this.llm.stream({
-      provider: this.config.provider,
-      model: this.config.model,
-      ...(this.config.reasoningEffort === undefined
-        ? {}
-        : { reasoningEffort: ReasoningEffortId(this.config.reasoningEffort) }),
-      messages,
-      system: systemPrompt(dateInTimeZone(this.clock(), this.config.timeZone), this.config.timeZone),
-      maxTokens: this.config.maxOutputTokens,
-      signal: operationSignal,
-    })) {
+    let assembler: BlockAssembler
+    for (;;) {
+      assembler = new BlockAssembler()
+      const tools = research?.tools() ?? []
+      for await (const chunk of this.llm.stream({
+        provider: this.config.provider,
+        model: this.config.model,
+        ...(this.config.reasoningEffort === undefined
+          ? {}
+          : { reasoningEffort: ReasoningEffortId(this.config.reasoningEffort) }),
+        messages: [...messages],
+        system: systemPrompt(dateInTimeZone(this.clock(), this.config.timeZone), this.config.timeZone),
+        maxTokens: this.config.maxOutputTokens,
+        signal: operationSignal,
+        ...(tools.length === 0 ? {} : { tools }),
+      })) {
+        operationSignal.throwIfAborted()
+        assembler.push(chunk)
+      }
       operationSignal.throwIfAborted()
-      assembler.push(chunk)
+      const blocks = assembler.blocks()
+      if (assembler.finish.kind === 'tool-calls' && research !== undefined) {
+        const calls = blocks.filter((block): block is Extract<typeof block, { type: 'tool-call' }> => block.type === 'tool-call')
+        if (calls.length === 0 || blocks.some(block => !['text', 'reasoning', 'tool-call'].includes(block.type))) {
+          throw new ArticleResearchError('INVALID_TOOL_RESPONSE', 'ai-daily: model returned an invalid research tool response')
+        }
+        if (tools.length === 0) {
+          throw new ArticleResearchError('RESEARCH_LIMIT', 'ai-daily: model requested more research after the per-article limit; increase maxResearchCalls or retry')
+        }
+        messages.push(assembler.message({
+          provider: this.config.provider, model: this.config.model,
+          ...(assembler.replayState === undefined ? {} : { replayState: assembler.replayState }),
+        }))
+        for (const call of calls) messages.push(await research.execute(call, operationSignal))
+        continue
+      }
+      const failure = terminalError(assembler.finish)
+      if (failure !== undefined) throw failure
+      if (blocks.some(block => block.type !== 'text' && block.type !== 'reasoning')) {
+        throw new Error('ai-daily: article analysis returned unsupported content')
+      }
+      break
     }
-    operationSignal.throwIfAborted()
-
-    const failure = terminalError(assembler.finish)
-    if (failure !== undefined) throw failure
     const blocks = assembler.blocks()
-    if (blocks.some(block => block.type !== 'text' && block.type !== 'reasoning')) {
-      throw new Error('ai-daily: article analysis returned unsupported content')
-    }
     const text = blocks
       .filter((block): block is Extract<(typeof blocks)[number], { type: 'text' }> => block.type === 'text')
       .map(block => block.text)

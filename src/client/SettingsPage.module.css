@@ -72,6 +72,15 @@
 
 .source + .source { border-top: 0.5px solid var(--dsw-alias-border-l2); }
 
+.research-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
 .rank {
   display: grid;
   width: 22px;

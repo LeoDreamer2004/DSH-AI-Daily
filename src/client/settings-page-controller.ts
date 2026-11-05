@@ -22,6 +22,7 @@ export interface SettingsPageInjected {
   }
   readonly loadCatalog: () => void
   readonly setSourceEnabled: (source: ArticleSource, enabled: boolean) => void
+  readonly setWebSearchEnabled: (enabled: boolean) => void
   readonly selectModel: (selection: ModelSelection) => void
 }
 
@@ -53,6 +54,15 @@ export class SettingsPageController {
     return {
       hooks: { aiDailySettings: this.store },
       loadCatalog: () => { void this.loadCatalog() },
+      setWebSearchEnabled: (enabled) => {
+        const current = this.currentSettings()
+        if (current === undefined) return
+        void this.write(
+          { ...current, webSearchEnabled: enabled },
+          () => this.scope.set('webSearchEnabled', enabled),
+          settings => settings.webSearchEnabled === enabled,
+        )
+      },
       setSourceEnabled: (source, enabled) => {
         const current = this.currentSettings()
         if (current === undefined) return

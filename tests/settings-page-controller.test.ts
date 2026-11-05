@@ -11,7 +11,6 @@ function memoryScope(initial: AiDailySettings): ConfigForm<AiDailySettings> {
     user: {},
     revision: 1,
     writable: true,
-    mode: 'host',
   }
   const listeners = new Set<() => void>()
   const publish = (value: AiDailySettings): void => {
@@ -43,11 +42,28 @@ function memoryScope(initial: AiDailySettings): ConfigForm<AiDailySettings> {
 }
 
 describe('SettingsPageController', () => {
+  it('persists the research switch and retains it across model and source changes', async () => {
+    const scope = memoryScope({
+      aiera: true, jiqizhixin: true, qbitai: true, modelProvider: 'test', model: 'test', webSearchEnabled: false,
+    })
+    const controller = new SettingsPageController(scope, { modelCatalog: vi.fn() } as never)
+    controller.inject().setWebSearchEnabled(true)
+    await vi.waitFor(() => { expect(scope.getSnapshot().value?.webSearchEnabled).toBe(true) })
+    controller.inject().selectModel({ provider: 'another', model: 'another' })
+    await vi.waitFor(() => { expect(scope.getSnapshot().value?.model).toBe('another') })
+    expect(scope.getSnapshot().value?.webSearchEnabled).toBe(true)
+    controller.inject().setSourceEnabled('qbitai', false)
+    await vi.waitFor(() => { expect(scope.getSnapshot().value?.qbitai).toBe(false) })
+    expect(controller.store.getSnapshot().settings?.webSearchEnabled).toBe(true)
+    controller.dispose()
+  })
+
   it('keeps source changes visible while persistence is pending', async () => {
     const initial: AiDailySettings = {
       aiera: true,
       jiqizhixin: true,
       qbitai: true,
+      webSearchEnabled: false,
       modelProvider: 'deepseek-official',
       model: 'deepseek-v4-flash',
     }
@@ -83,6 +99,7 @@ describe('SettingsPageController', () => {
       aiera: true,
       jiqizhixin: true,
       qbitai: true,
+      webSearchEnabled: false,
       modelProvider: 'deepseek-official',
       model: 'deepseek-v4-flash',
     })
@@ -123,6 +140,7 @@ describe('SettingsPageController', () => {
       aiera: true,
       jiqizhixin: true,
       qbitai: true,
+      webSearchEnabled: false,
       modelProvider: 'deepseek-official',
       model: 'deepseek-v4-flash',
     })

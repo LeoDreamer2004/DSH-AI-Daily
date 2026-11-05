@@ -31,12 +31,14 @@ function modelKey(provider: string, model: string): string {
 
 /** Render AI Daily preferences as a first-class Harness settings page. */
 export function SettingsPage(props: SettingsPageProps) {
-  const { loadCatalog, selectModel, setSourceEnabled, t } = props
+  const { loadCatalog, selectModel, setSourceEnabled, setWebSearchEnabled, t } = props
   const state = props.useAiDailySettings(snapshot => snapshot)
   const pageTitleId = useId()
   const sourceLegendId = useId()
   const modelLabelId = useId()
   const effortLabelId = useId()
+  const researchLabelId = useId()
+  const researchDescriptionId = useId()
 
   useEffect(() => { loadCatalog() }, [loadCatalog])
 
@@ -120,7 +122,25 @@ export function SettingsPage(props: SettingsPageProps) {
         <div className={css.cardHeader}>
           <h3 id={modelLabelId}>{t('settings.model.title')}</h3>
         </div>
-
+        <div className={css.researchRow}>
+          <span className={css.sourceCopy}>
+            <strong id={researchLabelId}>{t('settings.research.title')}</strong>
+            <small id={researchDescriptionId}>{t('settings.research.description')}</small>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings?.webSearchEnabled ?? false}
+            aria-labelledby={researchLabelId}
+            aria-describedby={researchDescriptionId}
+            className={css.switch}
+            data-active={settings?.webSearchEnabled ? 'true' : undefined}
+            disabled={controlsDisabled}
+            onClick={() => { setWebSearchEnabled(!settings?.webSearchEnabled) }}
+          >
+            <span className={css.thumb} />
+          </button>
+        </div>
         <div className={css.fields}>
           <label className={css.field}>
             <span>{t('settings.model.route')}</span>

@@ -2,6 +2,7 @@ import type { WebRuntime } from '@deepseek-ai/dsh-web'
 import type { LlmRuntime } from '@deepseek-ai/dsh-llm'
 import { LlmArticleAnalyzer } from './analysis/model.js'
 import type { ArticleAnalysisEngine } from './analysis/model.js'
+import { DEFAULT_RESEARCH_LIMITS, type ArticleResearchLimits, type ResearchActivity } from './analysis/research.js'
 import { buildDailyDigest, dateInTimeZone, parseCalendarDate } from './digest.js'
 import {
   DEFAULT_SOURCE_SETTINGS,
@@ -49,6 +50,10 @@ export interface AiDailyServiceConfig {
   readonly maxArticlesPerRefresh: number
   readonly timeZone: string
   readonly sourceSettings?: AiDailySourceSettings
+  /** Whether new analyses expose model-selected research tools; omitted means disabled. */
+  readonly webSearchEnabled?: boolean
+  /** Per-article research budget; omitted uses DEFAULT_RESEARCH_LIMITS. */
+  readonly researchLimits?: ArticleResearchLimits
 }
 
 /** Logging surface used by background-operation diagnostics. */
@@ -75,9 +80,10 @@ export class AiDailyService {
   private progress: DailyOperationProgress | undefined
   private sourceSettings: AiDailySourceSettings
   private modelSelection: AiDailyModelSelection
+  private webSearchEnabled: boolean
 
   constructor(
-    private readonly web: Pick<WebRuntime, 'fetch'>,
+    private readonly web: Pick<WebRuntime, 'fetch' | 'search'>,
     llm: Pick<LlmRuntime, 'stream'>,
     private readonly repository: ArticleRepository,
     private readonly config: AiDailyServiceConfig,
@@ -87,6 +93,7 @@ export class AiDailyService {
   ) {
     this.llm = llm
     this.analyzerOverride = analyzer
+    this.webSearchEnabled = config.webSearchEnabled ?? false
     this.sourceSettings = { ...(config.sourceSettings ?? DEFAULT_SOURCE_SETTINGS) }
     this.modelSelection = {
       modelProvider: config.modelProvider,
@@ -126,6 +133,7 @@ export class AiDailyService {
   setSettings(settings: AiDailySettings): void {
     this.sourceSettings = sourceSettingsOf(settings)
     this.modelSelection = modelSelectionOf(settings)
+    this.webSearchEnabled = settings.webSearchEnabled
   }
 
   /** Return one durable article record by id. */
@@ -434,7 +442,20 @@ export class AiDailyService {
       maxOutputTokens: this.config.maxAnalysisTokens,
       timeoutMs: this.config.modelTimeoutMs,
       timeZone: this.config.timeZone,
-    }, this.clock)
+    }, this.clock, this.webSearchEnabled ? {
+      web: this.web,
+      limits: this.config.researchLimits ?? DEFAULT_RESEARCH_LIMITS,
+      onActivity: activity => { this.researchActivity(activity) },
+    } : undefined)
+  }
+
+  private researchActivity(activity: ResearchActivity): void {
+    if (this.progress !== undefined) {
+      this.progress = { ...this.progress, phase: activity.state === 'started' ? activity.phase : 'analyzing' }
+    }
+    const message = `ai-daily: research ${activity.phase} ${activity.state} target=${JSON.stringify(activity.target)}${activity.detail === undefined ? '' : ` detail=${JSON.stringify(activity.detail)}`}`
+    if (activity.state === 'failed') this.logger.warn(message)
+    else this.logger.info(message)
   }
 
   private setProgress(

@@ -434,6 +434,8 @@ function LibraryPanel({ state, actions, t }: {
 function queueProgressLabel(state: DashboardState, t: TranslateNS<typeof NS>): string {
   const phase = state.progress?.phase
   if (phase === 'reading') return t('queue.phase.reading')
+  if (phase === 'searching') return t('queue.phase.searching')
+  if (phase === 'fetching') return t('queue.phase.fetching')
   if (phase === 'analyzing') return t('queue.phase.analyzing')
   if (phase === 'saving') return t('queue.phase.saving')
   return t('queue.phase.waiting')

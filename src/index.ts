@@ -14,6 +14,7 @@ import { registerDashboardRpc } from './dashboard/rpc.js'
 import { installAutomaticRefresh } from './scheduler.js'
 import type { AiDailySettings } from './settings.js'
 import { AiDailyService } from './service.js'
+import { DEFAULT_RESEARCH_LIMITS } from './analysis/research.js'
 import { ArticleRepository } from './storage/repository.js'
 import { registerAiDailyTools } from './tools.js'
 
@@ -75,6 +76,14 @@ export interface Config {
   readonly model?: string
   /** Optional reasoning effort for article analysis. */
   readonly reasoningEffort?: string
+  /** Allow model-selected search and page retrieval during analysis; disabled by default. */
+  readonly webSearchEnabled?: boolean
+  /** Shared search/fetch attempt budget for each article. */
+  readonly maxResearchCalls?: number
+  /** Maximum sources returned by one research search. */
+  readonly maxSearchResults?: number
+  /** Maximum reference text characters returned by one research call. */
+  readonly maxResearchChars?: number
   /** Maximum output tokens for one article analysis. */
   readonly maxAnalysisTokens?: number
   /** End-to-end timeout for one article analysis. */
@@ -95,12 +104,13 @@ export interface Config {
 
 /** Runtime validation and defaults for plugin configuration. */
 type DefaultConfig = Required<Omit<Config, 'reasoningEffort'>>
-type RuntimeConfig = Omit<DefaultConfig, 'aiera' | 'jiqizhixin' | 'qbitai' | 'modelProvider' | 'model'> & {
+type RuntimeConfig = Omit<DefaultConfig, 'aiera' | 'jiqizhixin' | 'qbitai' | 'modelProvider' | 'model' | 'webSearchEnabled'> & {
   aiera: Volatile<boolean>
   jiqizhixin: Volatile<boolean>
   qbitai: Volatile<boolean>
   modelProvider: Volatile<string>
   model: Volatile<string>
+  webSearchEnabled: Volatile<boolean>
   reasoningEffort: Volatile<string | undefined>
 }
 
@@ -118,6 +128,10 @@ const DEFAULT_CONFIG: DefaultConfig = {
   requestTimeoutMs: 30_000,
   modelProvider: 'deepseek-official',
   model: 'deepseek-v4-flash',
+  webSearchEnabled: false,
+  maxResearchCalls: DEFAULT_RESEARCH_LIMITS.maxCalls,
+  maxSearchResults: DEFAULT_RESEARCH_LIMITS.maxResults,
+  maxResearchChars: DEFAULT_RESEARCH_LIMITS.maxResultChars,
   maxAnalysisTokens: 16_384,
   modelTimeoutMs: 120_000,
   maxArticlesPerRefresh: 20,
@@ -141,6 +155,10 @@ export const Config = Schema.object({
   modelProvider: Schema.string().min(1).default(DEFAULT_CONFIG.modelProvider).volatile(),
   model: Schema.string().min(1).default(DEFAULT_CONFIG.model).volatile(),
   reasoningEffort: Schema.string().volatile(),
+  webSearchEnabled: Schema.boolean().default(DEFAULT_CONFIG.webSearchEnabled).volatile(),
+  maxResearchCalls: Schema.number().default(DEFAULT_CONFIG.maxResearchCalls),
+  maxSearchResults: Schema.number().default(DEFAULT_CONFIG.maxSearchResults),
+  maxResearchChars: Schema.number().default(DEFAULT_CONFIG.maxResearchChars),
   maxAnalysisTokens: Schema.number().default(DEFAULT_CONFIG.maxAnalysisTokens),
   modelTimeoutMs: Schema.number().default(DEFAULT_CONFIG.modelTimeoutMs),
   maxArticlesPerRefresh: Schema.number().default(DEFAULT_CONFIG.maxArticlesPerRefresh),
@@ -165,6 +183,9 @@ export async function apply(ctx: Context, resolved: ReturnType<typeof Config>): 
   assertPositiveInteger('maxAnalysisTokens', resolved.maxAnalysisTokens)
   assertPositiveInteger('modelTimeoutMs', resolved.modelTimeoutMs)
   assertPositiveInteger('maxArticlesPerRefresh', resolved.maxArticlesPerRefresh)
+  assertPositiveInteger('maxResearchCalls', resolved.maxResearchCalls)
+  assertRange('maxSearchResults', resolved.maxSearchResults, 1, 50)
+  assertPositiveInteger('maxResearchChars', resolved.maxResearchChars)
   assertPositiveInteger('schedulerCheckIntervalMs', resolved.schedulerCheckIntervalMs)
   assertMaximum('requestTimeoutMs', resolved.requestTimeoutMs, MAX_TIMER_DELAY_MS)
   assertMaximum('modelTimeoutMs', resolved.modelTimeoutMs, MAX_TIMER_DELAY_MS)
@@ -187,6 +208,7 @@ export async function apply(ctx: Context, resolved: ReturnType<typeof Config>): 
       qbitai: resolved.qbitai.get(),
       modelProvider: resolved.modelProvider.get(),
       model: resolved.model.get(),
+      webSearchEnabled: resolved.webSearchEnabled.get(),
       ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
     }
   }
@@ -199,12 +221,18 @@ export async function apply(ctx: Context, resolved: ReturnType<typeof Config>): 
     modelProvider: _modelProvider,
     model: _model,
     reasoningEffort: _reasoningEffort,
+    webSearchEnabled: _webSearchEnabled,
+    maxResearchCalls,
+    maxSearchResults,
+    maxResearchChars,
     ...serviceConfig
   } = resolved
   const service = new AiDailyService(ctx.web, ctx.llm, repository, {
     ...serviceConfig,
     modelProvider: initialSettings.modelProvider,
     model: initialSettings.model,
+    webSearchEnabled: initialSettings.webSearchEnabled,
+    researchLimits: { maxCalls: maxResearchCalls, maxResults: maxSearchResults, maxResultChars: maxResearchChars },
     ...(initialSettings.reasoningEffort === undefined ? {} : { reasoningEffort: initialSettings.reasoningEffort }),
     sourceSettings: {
       aiera: initialSettings.aiera,

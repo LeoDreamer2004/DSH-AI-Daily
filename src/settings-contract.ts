@@ -18,7 +18,10 @@ export interface AiDailyModelSelection {
 }
 
 /** Complete user-editable AI Daily settings. */
-export interface AiDailySettings extends AiDailySourceSettings, AiDailyModelSelection {}
+export interface AiDailySettings extends AiDailySourceSettings, AiDailyModelSelection {
+  /** Allow the reading model to choose web searches and pages through Harness providers. */
+  readonly webSearchEnabled: boolean
+}
 
 /** Default source selection when neither composition nor user settings override it. */
 export const DEFAULT_SOURCE_SETTINGS: AiDailySourceSettings = {

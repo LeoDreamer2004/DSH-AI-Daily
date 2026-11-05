@@ -40,6 +40,8 @@ describe('AI Daily plugin lifecycle', () => {
       },
     } as never)
     const fiber = await ctx.plugin(plugin, { automaticRefresh: false })
+    const searchSetting = plugin.Config.dict?.webSearchEnabled
+    expect(searchSetting?.meta.default).toBe(false)
 
     expect(ctx.aiDaily.dailyDigest('2026-09-06').articles).toEqual([])
     expect(configureSettings.mock.calls[0]?.[0]).toEqual({ auto: false })

@@ -34,6 +34,7 @@ describe('AiDailyService refresh pipeline', () => {
     const repository = new ArticleRepository(new MemoryArticleTable())
     const analyzedSources: string[] = []
     const service = new AiDailyService({
+      search: async () => { throw new Error('unexpected research search') },
       fetch: async request => {
         if (request.url === 'https://aiera.com.cn/feed/') return response(aieraFeed, 'text')
         if (request.url === 'https://www.qbitai.com/feed/') return response(qbitFeed, 'text')
@@ -107,6 +108,7 @@ describe('AiDailyService refresh pipeline', () => {
     const repository = new ArticleRepository(new MemoryArticleTable())
     let analysisCount = 0
     const service = new AiDailyService({
+      search: async () => { throw new Error('unexpected research search') },
       fetch: async request => request.url === 'https://aiera.com.cn/feed/'
         ? response(xml, 'text')
         : response(html, 'html'),
@@ -187,6 +189,7 @@ describe('AiDailyService refresh pipeline', () => {
     const repository = new ArticleRepository(new MemoryArticleTable())
     const logs: string[] = []
     const service = new AiDailyService({
+      search: async () => { throw new Error('unexpected research search') },
       fetch: async request => {
         if (request.url === 'https://aiera.com.cn/feed/') return response(aieraFeed, 'text')
         if (request.url === 'https://www.qbitai.com/feed/') {
@@ -270,6 +273,7 @@ describe('AiDailyService refresh pipeline', () => {
     }
     const repository = new ArticleRepository(new MemoryArticleTable())
     service = new AiDailyService({
+      search: async () => { throw new Error('unexpected research search') },
       fetch: async () => {
         const next = responses.shift()
         if (next === undefined) throw new Error('unexpected fetch')
@@ -356,6 +360,7 @@ describe('AiDailyService refresh pipeline', () => {
     let fetchCount = 0
     let analysisCount = 0
     const service = new AiDailyService({
+      search: async () => { throw new Error('unexpected research search') },
       fetch: async request => {
         fetchCount++
         return request.url.endsWith('/feed/') ? response(xml, 'text') : response(html, 'html')
@@ -399,6 +404,7 @@ describe('AiDailyService refresh pipeline', () => {
     expect(fetchCount).toBe(0)
 
     service.setSettings({
+      webSearchEnabled: false,
       aiera: true,
       jiqizhixin: false,
       qbitai: false,
@@ -415,6 +421,7 @@ describe('AiDailyService refresh pipeline', () => {
     expect(service.listQueuedArticles('2026-09-04')).toHaveLength(1)
 
     service.setSettings({
+      webSearchEnabled: false,
       aiera: false,
       jiqizhixin: false,
       qbitai: false,
@@ -423,6 +430,7 @@ describe('AiDailyService refresh pipeline', () => {
     })
     expect(service.listQueuedArticles()).toHaveLength(0)
     service.setSettings({
+      webSearchEnabled: false,
       aiera: true,
       jiqizhixin: false,
       qbitai: true,
@@ -448,6 +456,7 @@ describe('AiDailyService refresh pipeline', () => {
     let analysisAttempts = 0
     let rejectAnalysis = true
     const service = new AiDailyService({
+      search: async () => { throw new Error('unexpected research search') },
       fetch: async () => {
         const next = responses.shift()
         if (next === undefined) throw new Error('unexpected fetch')
@@ -535,6 +544,7 @@ describe('AiDailyService refresh pipeline', () => {
     }], new Date('2026-09-05T02:00:00.000Z'))
     for (const article of registration.added) await repository.markFailed(article.id, 'Test failure')
     const service = new AiDailyService({
+      search: async () => { throw new Error('unexpected research search') },
       fetch: async () => { throw new Error('unexpected fetch') },
     }, {
       stream: () => { throw new Error('unexpected model stream') },
@@ -579,6 +589,7 @@ describe('AiDailyService refresh pipeline', () => {
     const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve })
     let attempts = 0
     const service = new AiDailyService({
+      search: async () => { throw new Error('unexpected research search') },
       fetch: async () => response(html, 'html'),
     }, {
       stream: () => { throw new Error('unexpected model stream') },
@@ -649,6 +660,7 @@ describe('AiDailyService refresh pipeline', () => {
 
     let observedPeerNews: readonly import('../src/types.js').PeerNewsContext[] = []
     const service = new AiDailyService({
+      search: async () => { throw new Error('unexpected research search') },
       fetch: async () => {
         const next = responses.shift()
         if (next === undefined) throw new Error('unexpected fetch')

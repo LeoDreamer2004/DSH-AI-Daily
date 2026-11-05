@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import {
   clientRequestSchema,
-  type ConnectionFetchHandler,
+  type ConnectionFetchRoute,
   type ConnectionRpcHandlerResult,
   type ServerResponse,
 } from '@deepseek-ai/dsh-client-connection'
@@ -253,7 +253,7 @@ function dashboardHandler(service: AiDailyService): DashboardHandler {
 function dashboardFetchHandler(
   handler: DashboardHandler,
   endpoint: AiDailyRpcEndpoint,
-): ConnectionFetchHandler['fetch'] {
+): ConnectionFetchRoute['fetch'] {
   const expectedMethod = aiDailyRpcMethod(endpoint)
   return async (request) => {
     const mediaType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
@@ -279,7 +279,7 @@ function dashboardFetchHandler(
   }
 }
 
-/** Register authenticated dashboard endpoints through Harness's shared API route table. */
+/** Register dashboard endpoints through Harness's owner-authenticated API route table. */
 export function registerDashboardRpc(
   ctx: Context,
   service: AiDailyService,
