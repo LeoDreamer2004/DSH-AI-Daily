@@ -29,6 +29,12 @@ export class MemoryArticleTable implements KvTable<ArticleId, ArticleRecord> {
     return this.records.delete(key)
   }
 
+  async deleteMany(keys: readonly ArticleId[]): Promise<number> {
+    let deleted = 0
+    for (const key of keys) if (this.records.delete(key)) deleted++
+    return deleted
+  }
+
   async update(
     key: ArticleId,
     transform: (current: ArticleRecord) => ArticleRecord,

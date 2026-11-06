@@ -38,6 +38,7 @@ import { ArticleRepository } from './storage/repository.js'
 export interface AiDailyServiceConfig {
   readonly aieraFeedUrl: string
   readonly jiqizhixinApiUrl?: string
+  readonly jiqizhixinLookupPages?: number
   readonly qbitFeedUrl?: string
   readonly maxFeedItems: number
   readonly maxArticleChars: number
@@ -109,6 +110,7 @@ export class AiDailyService {
     if (config.jiqizhixinApiUrl !== undefined) {
       sources.push(new JiqizhixinSource(this.web, {
         listUrl: config.jiqizhixinApiUrl,
+        ...(config.jiqizhixinLookupPages === undefined ? {} : { maxLookupPages: config.jiqizhixinLookupPages }),
         maxItems: config.maxFeedItems,
         maxArticleChars: config.maxArticleChars,
         requestTimeoutMs: config.requestTimeoutMs,

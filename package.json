@@ -1,6 +1,6 @@
 {
   "name": "dsh-ai-daily",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Collect AI news, summarize and categorize articles, and maintain a local reading library.",
   "icon": "./icon.svg",
   "type": "module",

@@ -25,3 +25,5 @@ pnpm web
 
 `cordis.patch.yml` 是插件 bundle 的加载配置，不是对 Harness 源码的修改。它注册 AI 日报，并将网页正文字符上限从 Harness 默认的 100,000 提高到 1,000,000，以容纳资讯页和 API 正文。启动脚本不使用命令行 `--patch`，避免覆盖设置页保存的配置。`AI_DAILY_AUTOMATIC_REFRESH=false` 可关闭默认的自动刷新；profile 中显式保存的设置优先。
 
+机器之心正文通过公开的 `/api/article_library/articles/{id}.json` 获取，使用列表提供的来源 ID，不再把文章日期 slug 当作 API ID。本地保存可选的 `sourceArticleId`，保留已有 URL、已读状态和总结；旧记录缺少该字段时最多查找 `jiqizhixinLookupPages` 页列表（默认 5 页），找到 ID 后再读取正文。若站点返回推广或登录 HTML，文章保留失败状态并明确报错，不会把占位页交给模型。
+

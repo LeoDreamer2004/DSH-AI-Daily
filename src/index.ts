@@ -15,6 +15,7 @@ import { installAutomaticRefresh } from './scheduler.js'
 import type { AiDailySettings } from './settings.js'
 import { AiDailyService } from './service.js'
 import { DEFAULT_RESEARCH_LIMITS } from './analysis/research.js'
+import { DEFAULT_JIQIZHIXIN_LOOKUP_PAGES } from './sources/jiqizhixin.js'
 import { ArticleRepository } from './storage/repository.js'
 import { registerAiDailyTools } from './tools.js'
 
@@ -58,6 +59,8 @@ export interface Config {
   readonly aiera?: boolean
   /** Machine Heart public article-library listing API URL. */
   readonly jiqizhixinApiUrl?: string
+  /** Maximum listing pages used to recover Machine Heart API IDs for legacy records. */
+  readonly jiqizhixinLookupPages?: number
   /** Whether Machine Heart discovery is enabled. */
   readonly jiqizhixin?: boolean
   /** QbitAI WordPress RSS feed URL. */
@@ -120,6 +123,7 @@ const DEFAULT_CONFIG: DefaultConfig = {
   aieraFeedUrl: 'https://aiera.com.cn/feed/',
   aiera: true,
   jiqizhixinApiUrl: 'https://www.jiqizhixin.com/api/article_library/articles.json?sort=time&page=1',
+  jiqizhixinLookupPages: DEFAULT_JIQIZHIXIN_LOOKUP_PAGES,
   jiqizhixin: true,
   qbitFeedUrl: 'https://www.qbitai.com/feed/',
   qbitai: true,
@@ -146,6 +150,7 @@ export const Config = Schema.object({
   aieraFeedUrl: Schema.string().default(DEFAULT_CONFIG.aieraFeedUrl),
   aiera: Schema.boolean().default(DEFAULT_CONFIG.aiera).volatile(),
   jiqizhixinApiUrl: Schema.string().default(DEFAULT_CONFIG.jiqizhixinApiUrl),
+  jiqizhixinLookupPages: Schema.number().default(DEFAULT_CONFIG.jiqizhixinLookupPages),
   jiqizhixin: Schema.boolean().default(DEFAULT_CONFIG.jiqizhixin).volatile(),
   qbitFeedUrl: Schema.string().default(DEFAULT_CONFIG.qbitFeedUrl),
   qbitai: Schema.boolean().default(DEFAULT_CONFIG.qbitai).volatile(),
@@ -178,6 +183,7 @@ function assertPositiveInteger(name: string, value: number): void {
 /** Open durable state and provide the AI Daily service. */
 export async function apply(ctx: Context, resolved: ReturnType<typeof Config>): Promise<void> {
   assertPositiveInteger('maxFeedItems', resolved.maxFeedItems)
+  assertPositiveInteger('jiqizhixinLookupPages', resolved.jiqizhixinLookupPages)
   assertPositiveInteger('maxArticleChars', resolved.maxArticleChars)
   assertPositiveInteger('requestTimeoutMs', resolved.requestTimeoutMs)
   assertPositiveInteger('maxAnalysisTokens', resolved.maxAnalysisTokens)

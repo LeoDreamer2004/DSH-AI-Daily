@@ -18,6 +18,8 @@ export interface DiscoveredArticle {
   readonly publishedAt?: string | undefined
   readonly author?: string | undefined
   readonly excerpt?: string | undefined
+  /** Publisher's API identifier; absent in repositories created before source IDs were retained. */
+  readonly sourceArticleId?: string | undefined
 }
 
 /** Plain-text article body prepared for model consumption. */

@@ -10,12 +10,17 @@ const PUBLIC_ORIGIN = 'https://www.jiqizhixin.com'
 const ARTICLE_PATH_PREFIX = '/articles/'
 const ARTICLE_API_PATH_PREFIX = '/api/article_library/articles/'
 
+/** Default maximum listing pages consulted to resolve a legacy article's API ID. */
+export const DEFAULT_JIQIZHIXIN_LOOKUP_PAGES = 5
+
 /** Source-specific configuration for the Machine Heart article-library API. */
 export interface JiqizhixinSourceConfig {
   readonly listUrl: string
   readonly maxItems: number
   readonly maxArticleChars: number
   readonly requestTimeoutMs: number
+  /** Maximum listing pages for records without an API ID; omitted uses DEFAULT_JIQIZHIXIN_LOOKUP_PAGES. */
+  readonly maxLookupPages?: number
 }
 
 /** Stable failure codes exposed by the Machine Heart adapter. */
@@ -24,6 +29,8 @@ export type JiqizhixinSourceErrorCode =
   | 'INVALID_RESPONSE'
   | 'EMPTY_CONTENT'
   | 'TRUNCATED_RESPONSE'
+  | 'HTML_RESPONSE'
+  | 'ARTICLE_ID_NOT_FOUND'
 
 /** Error raised when a Machine Heart response cannot be represented safely. */
 export class JiqizhixinSourceError extends Error {
@@ -38,7 +45,7 @@ export class JiqizhixinSourceError extends Error {
 }
 
 const listArticleSchema = z.object({
-  id: z.string().min(1).max(200),
+  id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/),
   title: z.string().trim().min(1).max(500),
   slug: z.string().trim().min(1).max(300),
   publishedAt: z.string().max(100).optional(),
@@ -49,6 +56,7 @@ const listArticleSchema = z.object({
 const listResponseSchema = z.object({
   success: z.literal(true),
   articles: z.array(listArticleSchema),
+  hasNextPage: z.boolean().optional(),
 })
 
 const detailResponseSchema = z.object({
@@ -80,6 +88,12 @@ function responseText(response: WebFetchResult, resource: string): string {
 }
 
 function parseJson(text: string, resource: string): unknown {
+  if (text.trimStart().startsWith('<')) {
+    throw new JiqizhixinSourceError(
+      'HTML_RESPONSE',
+      `${resource} returned an HTML page instead of article JSON. Machine Heart may be showing a data-service or login page; no article text was read.`,
+    )
+  }
   try {
     return JSON.parse(text)
   } catch (error) {
@@ -197,6 +211,7 @@ export function parseJiqizhixinListing(
       url: canonicalUrl,
       canonicalUrl,
       title: item.title.trim(),
+      sourceArticleId: item.id,
       ...(publishedAt === undefined ? {} : { publishedAt }),
       ...(item.author === undefined ? {} : { author: item.author.trim() }),
       ...(excerpt === undefined || excerpt === '' ? {} : { excerpt }),
@@ -232,11 +247,15 @@ export function parseJiqizhixinArticle(
 /** Anonymous Machine Heart discovery and article reader over the Harness web seam. */
 export class JiqizhixinSource implements ArticleSourceAdapter {
   readonly source = 'jiqizhixin' as const
+  private readonly maxLookupPages: number
 
   constructor(
     private readonly web: Pick<WebRuntime, 'fetch'>,
     private readonly config: JiqizhixinSourceConfig,
-  ) {}
+  ) {
+    this.maxLookupPages = config.maxLookupPages ?? DEFAULT_JIQIZHIXIN_LOOKUP_PAGES
+    assertPositiveInteger('maxLookupPages', this.maxLookupPages)
+  }
 
   async discover(signal?: AbortSignal): Promise<readonly DiscoveredArticle[]> {
     const response = await this.fetch(this.config.listUrl, signal)
@@ -250,13 +269,41 @@ export class JiqizhixinSource implements ArticleSourceAdapter {
     if (article.source !== this.source) {
       throw new TypeError(`JiqizhixinSource cannot read source '${article.source}'`)
     }
-    const slug = slugFromArticle(article)
-    const detailUrl = new URL(`${ARTICLE_API_PATH_PREFIX}${encodeURIComponent(slug)}`, PUBLIC_ORIGIN).href
+    slugFromArticle(article)
+    const articleId = article.sourceArticleId ?? await this.resolveLegacyArticleId(article, signal)
+    if (!listArticleSchema.shape.id.safeParse(articleId).success) {
+      throw new JiqizhixinSourceError('INVALID_RESPONSE', 'Machine Heart article has an invalid publisher API ID')
+    }
+    const detailUrl = new URL(`${ARTICLE_API_PATH_PREFIX}${encodeURIComponent(articleId)}.json`, PUBLIC_ORIGIN).href
     const response = await this.fetch(detailUrl, signal)
     return parseJiqizhixinArticle(
       responseText(response, 'Machine Heart article'),
-      article,
+      { ...article, sourceArticleId: articleId },
       this.config.maxArticleChars,
+    )
+  }
+
+  /** Resolve old URL-only records without modifying their durable identity or processing state. */
+  private async resolveLegacyArticleId(article: DiscoveredArticle, signal?: AbortSignal): Promise<string> {
+    const listingUrl = new URL(this.config.listUrl)
+    const lookupSignal = signal === undefined
+      ? AbortSignal.timeout(this.config.requestTimeoutMs)
+      : AbortSignal.any([signal, AbortSignal.timeout(this.config.requestTimeoutMs)])
+    for (let page = 1; page <= this.maxLookupPages; page++) {
+      lookupSignal.throwIfAborted()
+      listingUrl.searchParams.set('page', String(page))
+      const response = await this.fetch(listingUrl.href, lookupSignal)
+      lookupSignal.throwIfAborted()
+      const text = responseText(response, 'Machine Heart article listing')
+      const listing = parseWithSchema(listResponseSchema, text, 'Machine Heart article listing')
+      const match = listing.articles.find(item => safeSlug(item.slug) !== undefined
+        && publicArticleUrl(item.slug) === article.canonicalUrl)
+      if (match !== undefined) return match.id
+      if (listing.hasNextPage === false || listing.articles.length === 0) break
+    }
+    throw new JiqizhixinSourceError(
+      'ARTICLE_ID_NOT_FOUND',
+      'Machine Heart article API ID was not found in the recent listings. Crawl articles again before retrying, or increase jiqizhixinLookupPages for an older article.',
     )
   }
 

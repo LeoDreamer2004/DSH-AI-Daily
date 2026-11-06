@@ -17,6 +17,7 @@ export const articleRecordSchema: z.ZodType<ArticleRecord> = z.object({
   publishedAt: utcInstantSchema.optional(),
   author: z.string().min(1).max(500).optional(),
   excerpt: z.string().min(1).max(1_000).optional(),
+  sourceArticleId: z.string().min(1).max(200).optional(),
   status: z.enum(['discovered', 'processed', 'failed']),
   discoveredAt: utcInstantSchema,
   lastSeenAt: utcInstantSchema,

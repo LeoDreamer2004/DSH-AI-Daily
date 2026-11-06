@@ -16,6 +16,26 @@ function discovered(overrides: Partial<DiscoveredArticle> = {}): DiscoveredArtic
 }
 
 describe('ArticleRepository', () => {
+  it('adds API IDs to legacy discoveries without resetting failed or processed state', async () => {
+    const table = new MemoryArticleTable()
+    const repository = new ArticleRepository(table)
+    const legacy = discovered({ source: 'jiqizhixin', url: 'https://www.jiqizhixin.com/articles/story', canonicalUrl: 'https://www.jiqizhixin.com/articles/story' })
+    const registered = await repository.registerDiscovered([legacy])
+    const id = registered.added[0]?.id
+    if (id === undefined) throw new Error('Expected article registration')
+    await repository.markFailed(id, 'Machine Heart article did not return valid JSON')
+    const upgraded = await repository.registerDiscovered([{ ...legacy, sourceArticleId: 'machine-heart-id' }])
+    expect(upgraded.added).toHaveLength(0)
+    expect(upgraded.existing[0]).toMatchObject({ id, status: 'failed', sourceArticleId: 'machine-heart-id' })
+    expect(table.size).toBe(1)
+    const reopened = new ArticleRepository(table)
+    expect(reopened.get(id)?.sourceArticleId).toBe('machine-heart-id')
+    await reopened.registerDiscovered([legacy])
+    expect(reopened.get(id)?.sourceArticleId).toBe('machine-heart-id')
+    expect(articleRecordSchema.safeParse(reopened.get(id)).success).toBe(true)
+    expect(articleRecordSchema.safeParse(registered.added[0]).success).toBe(true)
+  })
+
   it('deduplicates canonical URLs and refreshes metadata without resetting state', async () => {
     const table = new MemoryArticleTable()
     const repository = new ArticleRepository(table)

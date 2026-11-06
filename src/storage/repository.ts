@@ -95,6 +95,7 @@ export class ArticleRepository {
           ...(article.publishedAt === undefined ? {} : { publishedAt: article.publishedAt }),
           ...(article.author === undefined ? {} : { author: article.author }),
           ...(article.excerpt === undefined ? {} : { excerpt: article.excerpt }),
+          ...(article.sourceArticleId === undefined ? {} : { sourceArticleId: article.sourceArticleId }),
         }
         const validated = articleRecordSchema.parse(refreshed)
         await this.table.put(id, validated)
